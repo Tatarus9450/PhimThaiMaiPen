@@ -15,20 +15,32 @@ PROFILE_FILE = Path("/tmp/voice_agent_profile")
 
 DEFAULT_CONFIG = {
     "POPUP_ENABLED": "true",
-    "TYPHOON_MODEL": "scb10x/typhoon-asr-realtime",
+    "TYPHOON_MODEL": "Qwen/Qwen3-ASR-0.6B",
+    "TYPHOON_ASR_BACKEND": "auto",
+    "TYPHOON_ASR_LANGUAGE": "auto",
     "TYPHOON_TRANSLATE_MODEL": "Helsinki-NLP/opus-mt-th-en",
     "TYPHOON_DEVICE": "auto",
     "TYPHOON_CPU_THREADS": str(os.cpu_count() or 4),
     "TYPHOON_VENV": str((BASE / ".venv").resolve()),
     "TYPHOON_HF_HOME": str((BASE / ".cache" / "huggingface").resolve()),
     "TYPHOON_PROFILE_DEFAULT": "smart",
-    "TYPHOON_REQUEST_TIMEOUT": "120",
-    "TYPHOON_STARTUP_TIMEOUT": "180",
+    "TYPHOON_REQUEST_TIMEOUT": "300",
+    "TYPHOON_STARTUP_TIMEOUT": "600",
     "TYPHOON_FFMPEG_TIMEOUT": "30",
     "TYPHOON_REPLACEMENTS_FILE": str((BASE / "typhoon_replacements.tsv").resolve()),
 }
 
 PATH_KEYS = {"TYPHOON_VENV", "TYPHOON_HF_HOME", "TYPHOON_REPLACEMENTS_FILE"}
+
+
+def get_asr_backend(config: dict[str, str]) -> str:
+    backend = config.get("TYPHOON_ASR_BACKEND", "auto").strip().lower()
+    if backend == "auto":
+        model = config.get("TYPHOON_MODEL", DEFAULT_CONFIG["TYPHOON_MODEL"])
+        return "qwen" if "qwen3-asr" in model.lower() else "typhoon"
+    if backend not in {"qwen", "typhoon"}:
+        raise ValueError(f"Unsupported TYPHOON_ASR_BACKEND: {backend}")
+    return backend
 
 
 def _strip_value(raw: str) -> str:

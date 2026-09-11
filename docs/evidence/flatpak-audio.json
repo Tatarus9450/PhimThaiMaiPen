@@ -1,0 +1,30 @@
+{
+  "environment": "Installed Flatpak on Fedora KDE Wayland, PulseAudio portal socket",
+  "physical_microphone_opened": false,
+  "source": "Owned virtual source; public FLEURS input",
+  "tests": [
+    {
+      "mode": "capture",
+      "duration": 10.688,
+      "captured": true,
+      "errors": [],
+      "maximum_level_percent": 10,
+      "stopped_on_disconnect": false,
+      "wall_seconds": 10.710004161999677,
+      "library_sha256": "e47f547e49f804e5c5a3b96e5fbb6c401db8d497c3fd4454a33ab978c35c4e76"
+    },
+    {
+      "mode": "disconnect",
+      "duration": 1.024,
+      "captured": false,
+      "errors": [
+        "Selected microphone disconnected. Recording stopped."
+      ],
+      "maximum_level_percent": 0,
+      "stopped_on_disconnect": true,
+      "wall_seconds": 1.0460696770023787,
+      "library_sha256": "e47f547e49f804e5c5a3b96e5fbb6c401db8d497c3fd4454a33ab978c35c4e76"
+    }
+  ],
+  "owned_virtual_modules_removed": true
+}

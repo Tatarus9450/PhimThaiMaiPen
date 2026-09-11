@@ -1,0 +1,14 @@
+{
+  "model": "whisper-tiny-ov",
+  "interrupted_bytes_observed": 1114112,
+  "restart_exit_code": 0,
+  "resumed_http_requests": [
+    {
+      "range": "bytes=1114112-",
+      "status": 206
+    }
+  ],
+  "verified_after_resume": true,
+  "isolated_data": true,
+  "test_only_changes": "HTTP chunks 64 KiB with 4 ms delay; Xet disabled to observe Range headers"
+}

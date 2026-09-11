@@ -1,0 +1,528 @@
+[
+  {
+    "name": "python3-flit-core",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/69/59/b6fc2188dfc7ea4f936cd12b49d707f66a1cb7a1d2c16172963534db741b/flit_core-3.12.0.tar.gz",
+        "sha256": "18f63100d6f94385c6ed57a72073443e1a71a4acb4339491615d0f16d6ff01b2"
+      }
+    ]
+  },
+  {
+    "name": "python3-setuptools",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz",
+        "sha256": "487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a"
+      }
+    ]
+  },
+  {
+    "name": "python3-wheel",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/8a/98/2d9906746cdc6a6ef809ae6338005b3f21bb568bea3165cfc6a243fdc25c/wheel-0.45.1.tar.gz",
+        "sha256": "661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729"
+      }
+    ]
+  },
+  {
+    "name": "python3-packaging",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz",
+        "sha256": "94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79"
+      }
+    ]
+  },
+  {
+    "name": "python3-setuptools-scm",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/7b/b1/19587742aad604f1988a8a362e660e8c3ac03adccdb71c96d86526e5eb62/setuptools_scm-9.2.2.tar.gz",
+        "sha256": "1c674ab4665686a0887d7e24c03ab25f24201c213e82ea689d2f3e169ef7ef57"
+      }
+    ]
+  },
+  {
+    "name": "python3-pathspec",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz",
+        "sha256": "a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712"
+      }
+    ]
+  },
+  {
+    "name": "python3-pluggy",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz",
+        "sha256": "7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3"
+      }
+    ]
+  },
+  {
+    "name": "python3-trove-classifiers",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/d8/43/7935f8ea93fcb6680bc10a6fdbf534075c198eeead59150dd5ed68449642/trove_classifiers-2026.1.14.14.tar.gz",
+        "sha256": "00492545a1402b09d4858605ba190ea33243d361e2b01c9c296ce06b5c3325f3"
+      }
+    ]
+  },
+  {
+    "name": "python3-hatchling",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/8f/8a/cc1debe3514da292094f1c3a700e4ca25442489731ef7c0814358816bb03/hatchling-1.27.0.tar.gz",
+        "sha256": "971c296d9819abb3811112fc52c7a9751c8d381898f36533bb16f9791e941fd6"
+      }
+    ]
+  },
+  {
+    "name": "python3-hatch-vcs",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/6b/b0/4cc743d38adbee9d57d786fa496ed1daadb17e48589b6da8fa55717a0746/hatch_vcs-0.5.0.tar.gz",
+        "sha256": "0395fa126940340215090c344a2bf4e2a77bcbe7daab16f41b37b98c95809ff9"
+      }
+    ]
+  },
+  {
+    "name": "python3-accelerate",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/4a/8e/ac2a9566747a93f8be36ee08532eb0160558b07630a081a6056a9f89bf1d/accelerate-1.12.0.tar.gz",
+        "sha256": "70988c352feb481887077d2ab845125024b2a137a5090d6d7a32b57d03a45df6"
+      }
+    ]
+  },
+  {
+    "name": "python3-certifi",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
+        "sha256": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55"
+      }
+    ]
+  },
+  {
+    "name": "python3-cffi",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+        "sha256": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be"
+      }
+    ]
+  },
+  {
+    "name": "python3-charset-normalizer",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/e5/3f/143b048436775b0f76ac3eec145c019e8173ccc2885c8f20319b996d5e83/charset_normalizer-3.5.1.tar.gz",
+        "sha256": "6117b84ea48435e5356dc737f5121485c30920ba43375fa7b434fd753df0eac3"
+      }
+    ]
+  },
+  {
+    "name": "python3-dbus-next",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/ce/45/6a40fbe886d60a8c26f480e7d12535502b5ba123814b3b9a0b002ebca198/dbus_next-0.2.3.tar.gz",
+        "sha256": "f4eae26909332ada528c0a3549dda8d4f088f9b365153952a408e28023a626a5"
+      }
+    ]
+  },
+  {
+    "name": "python3-filelock",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/38/46/126b1831dca12060d4a8296bf9c4fe5c93c4f22197fa239cb0cc82042bba/filelock-3.32.6.tar.gz",
+        "sha256": "a3f55a18af3652a94d8f47d6055df434f254ca1d02ef2524850c6d249ca2512c"
+      }
+    ]
+  },
+  {
+    "name": "python3-fsspec",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/00/78/f34251dadb8f3921264a1d9b8946f5e542014ee2614b285261b4e40e6775/fsspec-2026.7.0.tar.gz",
+        "sha256": "c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88"
+      }
+    ]
+  },
+  {
+    "name": "python3-huggingface-hub",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/7c/b7/8cb61d2eece5fb05a83271da168186721c450eb74e3c31f7ef3169fa475b/huggingface_hub-0.36.2.tar.gz",
+        "sha256": "1934304d2fb224f8afa3b87007d58501acfda9215b334eed53072dd5e815ff7a"
+      },
+      {
+        "type": "patch",
+        "path": "huggingface-hub-http.patch"
+      }
+    ]
+  },
+  {
+    "name": "python3-idna",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/5f/f7/abb373e5757eaec4b922b92f97ec8d6d7e057cf06778247604fbc4e7c3f3/idna-3.19.tar.gz",
+        "sha256": "5e0811a4383b21dc5838069f801c4fb62113b7447663d2530d2bd6e77b49bf15"
+      }
+    ]
+  },
+  {
+    "name": "python3-jinja2",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz",
+        "sha256": "0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"
+      }
+    ]
+  },
+  {
+    "name": "python3-markupsafe",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz",
+        "sha256": "722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"
+      }
+    ]
+  },
+  {
+    "name": "python3-mpmath",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/e0/47/dd32fa426cc72114383ac549964eecb20ecfd886d1e5ccf5340b55b02f57/mpmath-1.3.0.tar.gz",
+        "sha256": "7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"
+      }
+    ]
+  },
+  {
+    "name": "python3-networkx",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz",
+        "sha256": "26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509"
+      }
+    ]
+  },
+  {
+    "name": "python3-openvino-telemetry",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/71/8a/89d82f1a9d913fb266c2e6dc2f6030935db24b7152963a8db6c4f039787f/openvino_telemetry-2025.2.0.tar.gz",
+        "sha256": "8bf8127218e51e99547bf38b8fb85a8b31c9bf96e6f3a82eb0b3b6a34155977c"
+      }
+    ]
+  },
+  {
+    "name": "python3-psutil",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/aa/c6/d1ddf4abb55e93cebc4f2ed8b5d6dbad109ecb8d63748dd2b20ab5e57ebe/psutil-7.2.2.tar.gz",
+        "sha256": "0746f5f8d406af344fd547f1c8daa5f5c33dbc293bb8d6a16d80b4bb88f59372"
+      }
+    ]
+  },
+  {
+    "name": "python3-pycparser",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/1b/7d/92392ff7815c21062bea51aa7b87d45576f649f16458d78b7cf94b9ab2e6/pycparser-3.0.tar.gz",
+        "sha256": "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"
+      }
+    ]
+  },
+  {
+    "name": "python3-pyyaml",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/05/8e/961c0007c59b8dd7729d542c61a4d537767a59645b82a0b521206e1e25c2/pyyaml-6.0.3.tar.gz",
+        "sha256": "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"
+      }
+    ]
+  },
+  {
+    "name": "python3-qwen-asr",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/7f/5b/56c5175d1a4d6ed8602003385570304305e4ae9c40b999d12d75a70c0561/qwen_asr-0.0.6.tar.gz",
+        "sha256": "294893f2340dc2d58d1f1d1cb8ce26ac0a79f254805ab432dda2892bd5c8d13c"
+      },
+      {
+        "type": "patch",
+        "path": "qwen-minimal.patch"
+      }
+    ]
+  },
+  {
+    "name": "python3-regex",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/b9/5c/f403115361de25809e8f785686ec7096e30fef73be9ae35aa51da4e80abb/regex-2026.9.10.tar.gz",
+        "sha256": "1e321e2c84f0e52c457f5ea5944f796d6e8e09cb99738ea98dcc1bfe402a128d"
+      }
+    ]
+  },
+  {
+    "name": "python3-requests",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz",
+        "sha256": "f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"
+      }
+    ]
+  },
+  {
+    "name": "python3-soundfile",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/d2/db/949331952a6fb1c5b12e9de80fd08747966c2039d1a61db4764fbd3981c2/soundfile-0.14.0.tar.gz",
+        "sha256": "ba1c1a2d618bca5c406647c83b89f07cc8810fa506a50622a6993ba130c1de11"
+      }
+    ]
+  },
+  {
+    "name": "python3-sympy",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz",
+        "sha256": "d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517"
+      }
+    ]
+  },
+  {
+    "name": "python3-tqdm",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/0d/ea/b2a5bd54b28a324dae8211928b2d730b6547500342c7e6c6dea08bd0a485/tqdm-4.70.1.tar.gz",
+        "sha256": "cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4"
+      }
+    ]
+  },
+  {
+    "name": "python3-transformers",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/c4/35/67252acc1b929dc88b6602e8c4a982e64f31e733b804c14bc24b47da35e6/transformers-4.57.6.tar.gz",
+        "sha256": "55e44126ece9dc0a291521b7e5492b572e6ef2766338a610b9ab5afbb70689d3"
+      }
+    ]
+  },
+  {
+    "name": "python3-typing-extensions",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz",
+        "sha256": "dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5"
+      }
+    ]
+  },
+  {
+    "name": "python3-urllib3",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz",
+        "sha256": "231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"
+      }
+    ]
+  },
+  {
+    "name": "python3-webrtcvad-wheels",
+    "buildsystem": "simple",
+    "build-commands": [
+      "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app ."
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://files.pythonhosted.org/packages/28/ba/3a8ce2cff3eee72a39ed190e5f9dac792da1526909c97a11589590b21739/webrtcvad_wheels-2.0.14.tar.gz",
+        "sha256": "5f59c8e291c6ef102d9f39532982fbf26a52ce2de6328382e2654b0960fea397"
+      }
+    ]
+  }
+]

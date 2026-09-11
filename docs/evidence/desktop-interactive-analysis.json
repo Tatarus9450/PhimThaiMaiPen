@@ -1,0 +1,14 @@
+{
+  "source": "docs/evidence/desktop-interactive-diagnostic.json",
+  "original_evidence_unchanged": true,
+  "paste_exactly_once": true,
+  "all_original_mime_payloads_restored": true,
+  "additional_formats": [
+    "text/plain;charset=utf-8"
+  ],
+  "newer_copy_preserved": true,
+  "shortcut_activated": true,
+  "actual_shortcut": "Meta+H",
+  "interpretation": "The original test required an identical format set. Qt added text/plain;charset=utf-8; every original MIME byte payload matched. Preserve this first failure and use payload preservation for subsequent acceptance.",
+  "scope": "User-granted live Wayland portal in installed Flatpak, owned Qt target field. Not a cross-application focus test or physical microphone session."
+}

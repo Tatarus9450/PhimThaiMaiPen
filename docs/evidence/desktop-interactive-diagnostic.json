@@ -1,0 +1,66 @@
+{
+  "scope": "Interactive Wayland clipboard and portal probe; owned Qt test field; no physical recording",
+  "events": [
+    {
+      "event": "ready"
+    },
+    {
+      "event": "paste_enabled"
+    },
+    {
+      "event": "paste_sent"
+    },
+    {
+      "event": "shortcuts_enabled",
+      "trigger": "Meta+H"
+    },
+    {
+      "event": "shortcut"
+    },
+    {
+      "event": "shortcut"
+    },
+    {
+      "event": "shortcuts_enabled",
+      "trigger": ""
+    },
+    {
+      "event": "shortcuts_enabled",
+      "trigger": "Meta+H"
+    },
+    {
+      "event": "shortcut"
+    }
+  ],
+  "platform": "wayland",
+  "baseline_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty"
+  ],
+  "offer_owned_immediately": true,
+  "owned_before_restore": true,
+  "formats_before_restore": [
+    "text/plain",
+    "x-kde-passwordManagerHint",
+    "application/x-phimthai-transaction",
+    "text/plain;charset=utf-8"
+  ],
+  "test_window_active_before_restore": true,
+  "paste_exactly_once": true,
+  "clipboard_restored_all_mime": false,
+  "restored_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty",
+    "text/plain;charset=utf-8"
+  ],
+  "restored_original_formats_match": {
+    "text/plain": true,
+    "text/html": true,
+    "application/x-kde-onlyReplaceEmpty": true
+  },
+  "newer_copy_preserved": true,
+  "shortcut_activated": true,
+  "closed": true
+}

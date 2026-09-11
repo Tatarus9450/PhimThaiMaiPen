@@ -7,9 +7,17 @@ source "$SCRIPT_DIR/config.env"
 TXT_FILE="${1:-/tmp/voice_agent.txt}"
 TEXT="$(cat "$TXT_FILE" 2>/dev/null || true)"
 PREVIOUS_CLIPBOARD_FILE=""
+PREVIOUS_CLIPBOARD_TYPE=""
 KLIPPER_STATE_FILE=""
 RESTORE_DELAY="${CLIPBOARD_RESTORE_DELAY:-0.15}"
 SESSION_TYPE="$(printf '%s' "${XDG_SESSION_TYPE:-x11}" | tr '[:upper:]' '[:lower:]')"
+QDBUS_BIN=""
+for candidate in qdbus qdbus6 qdbus-qt6; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    QDBUS_BIN="$candidate"
+    break
+  fi
+done
 
 if [[ -z "$TEXT" ]]; then
   notify-send "Phim Thai Mai Pen" "No text recognized."
@@ -26,25 +34,36 @@ cleanup_previous_clipboard_file() {
 }
 
 has_klipper() {
-  command -v qdbus >/dev/null 2>&1 && qdbus org.kde.klipper /klipper >/dev/null 2>&1
+  [[ -n "$QDBUS_BIN" ]] && "$QDBUS_BIN" org.kde.klipper /klipper >/dev/null 2>&1
 }
 
 use_wayland_clipboard() {
   [[ "$SESSION_TYPE" == "wayland" ]] && command -v wl-copy >/dev/null 2>&1 && command -v wl-paste >/dev/null 2>&1
 }
 
+use_private_clipboard() {
+  use_wayland_clipboard && wl-copy --help 2>&1 | grep -q -- '--sensitive'
+}
+
 read_clipboard_to_file() {
   local target="$1"
   if use_wayland_clipboard; then
-    wl-paste --no-newline >"$target" 2>/dev/null
+    PREVIOUS_CLIPBOARD_TYPE="$(wl-paste --list-types 2>/dev/null | sed -n '1p')" || return 1
+    [[ -n "$PREVIOUS_CLIPBOARD_TYPE" ]] || return 1
+    wl-paste --no-newline --type "$PREVIOUS_CLIPBOARD_TYPE" >"$target" 2>/dev/null
   else
     xclip -selection clipboard -o >"$target" 2>/dev/null
   fi
 }
 
 write_clipboard() {
+  local mime_type="${1:-text/plain;charset=utf-8}"
   if use_wayland_clipboard; then
-    wl-copy --type text/plain;charset=utf-8
+    if use_private_clipboard; then
+      wl-copy --sensitive --type "$mime_type"
+    else
+      wl-copy --type "$mime_type"
+    fi
   else
     xclip -selection clipboard
   fi
@@ -52,25 +71,28 @@ write_clipboard() {
 
 clear_clipboard() {
   if use_wayland_clipboard; then
-    printf '' | wl-copy 2>/dev/null || true
+    wl-copy --clear 2>/dev/null || true
   else
     printf '' | xclip -selection clipboard 2>/dev/null || true
   fi
 }
 
 snapshot_clipboard() {
-  if has_klipper; then
+  # KDE ignores the sensitive offer in history. Preserve its existing history
+  # untouched instead of clearing and reconstructing it for temporary pastes.
+  if ! use_private_clipboard && has_klipper; then
     KLIPPER_STATE_FILE="$(mktemp)"
-    python3 - "$KLIPPER_STATE_FILE" <<'PY'
+    python3 - "$KLIPPER_STATE_FILE" "$QDBUS_BIN" <<'PY'
 import json
 import subprocess
 import sys
 
 state_path = sys.argv[1]
+qdbus = sys.argv[2]
 
 def qdbus_call(method: str, *args: str) -> str:
     proc = subprocess.run(
-        ["qdbus", "org.kde.klipper", "/klipper", method, *args],
+        [qdbus, "org.kde.klipper", "/klipper", method, *args],
         text=True,
         capture_output=True,
         check=False,
@@ -101,12 +123,13 @@ restore_clipboard() {
   sleep "$RESTORE_DELAY"
 
   if [[ -n "$KLIPPER_STATE_FILE" && -f "$KLIPPER_STATE_FILE" ]]; then
-    python3 - "$KLIPPER_STATE_FILE" <<'PY'
+    python3 - "$KLIPPER_STATE_FILE" "$QDBUS_BIN" <<'PY'
 import json
 import subprocess
 import sys
 
 state_path = sys.argv[1]
+qdbus = sys.argv[2]
 
 with open(state_path, encoding="utf-8") as handle:
     state = json.load(handle)
@@ -114,7 +137,7 @@ with open(state_path, encoding="utf-8") as handle:
 history = state.get("history") or []
 
 subprocess.run(
-    ["qdbus", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.clearClipboardHistory"],
+    [qdbus, "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.clearClipboardHistory"],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     check=False,
@@ -123,7 +146,7 @@ subprocess.run(
 if history:
     for item in reversed(history):
         subprocess.run(
-            ["qdbus", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.setClipboardContents", item],
+            [qdbus, "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.setClipboardContents", item],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -135,7 +158,7 @@ PY
 
   if [[ -n "$PREVIOUS_CLIPBOARD_FILE" && -f "$PREVIOUS_CLIPBOARD_FILE" ]]; then
     if use_wayland_clipboard; then
-      wl-copy <"$PREVIOUS_CLIPBOARD_FILE" 2>/dev/null || true
+      write_clipboard "$PREVIOUS_CLIPBOARD_TYPE" <"$PREVIOUS_CLIPBOARD_FILE" 2>/dev/null || true
     else
       xclip -selection clipboard <"$PREVIOUS_CLIPBOARD_FILE" 2>/dev/null || true
     fi
@@ -149,6 +172,13 @@ PY
 ensure_ydotoold() {
   if ! command -v ydotool >/dev/null 2>&1 || ! command -v ydotoold >/dev/null 2>&1; then
     return 1
+  fi
+
+  # Fedora runs ydotoold as a system service. Prefer its protected socket when
+  # it is available to the current user instead of starting a second daemon.
+  if [[ -S /run/ydotoold/socket && -r /run/ydotoold/socket && -w /run/ydotoold/socket ]]; then
+    export YDOTOOL_SOCKET="/run/ydotoold/socket"
+    return 0
   fi
 
   if pgrep -u "$USER" -x ydotoold >/dev/null 2>&1; then

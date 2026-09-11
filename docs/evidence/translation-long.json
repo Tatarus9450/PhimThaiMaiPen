@@ -1,0 +1,12 @@
+{
+  "model": "Helsinki-NLP/opus-mt-th-en",
+  "input_tokens": 606,
+  "chunks": 2,
+  "max_chunk_tokens": 475,
+  "input_characters_preserved": true,
+  "final_marker_719_present": false,
+  "all_number_markers_present": false,
+  "processing_seconds": 9.402867822995177,
+  "text": "Please check your output with English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, English, and English, and English. Please first, we need to test your English and English Signer. Please check the text before using it. The list of 1021. Today we test the printing program with Thai and English. The program is running with Thai and English. The program is running with 1022. Today we test with Thai and English.",
+  "scope": "Synthetic original Thai text for input coverage/output tail; not a translation quality benchmark"
+}

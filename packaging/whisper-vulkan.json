@@ -1,0 +1,99 @@
+[
+  {
+    "name": "spirv-headers",
+    "buildsystem": "cmake-ninja",
+    "config-opts": [
+      "-DSPIRV_HEADERS_ENABLE_TESTS=OFF",
+      "-DSPIRV_HEADERS_ENABLE_EXAMPLES=OFF"
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/2a611a970fdbc41ac2e3e328802aed9985352dca",
+        "sha256": "c2225a49c3d7efa5c4f4ce4a6b42081e6ea3daca376f3353d9d7c2722d77a28a"
+      }
+    ],
+    "post-install": [
+      "install -Dm644 LICENSE /app/libexec/whisper-vulkan/licenses/SPIRV-Headers.txt"
+    ]
+  },
+  {
+    "name": "whisper-vulkan",
+    "buildsystem": "simple",
+    "build-commands": [
+      "patch -d source -p1 --forward -i ../whisper-cpu-os-avx.patch",
+      "cmake -S source -B build-haswell -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-I/app/include -DCMAKE_SKIP_RPATH=TRUE -DWHISPER_BUILD_IS_DEV=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF -DGGML_VULKAN=OFF -DGGML_NATIVE=OFF -DGGML_SSE42=ON -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_BMI2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_BACKEND_DL=ON -DBUILD_SHARED_LIBS=ON -DWHISPER_CURL=OFF -DWHISPER_BUILD_COMMIT=927cfce34f31707e17f2bff35c349632fb9e2c3a -DCMAKE_PREFIX_PATH=/app -DVulkan_GLSLC_EXECUTABLE=/run/build/whisper-vulkan/glslc-serial -DGGML_CPU_ALL_VARIANTS=OFF -DGGML_AVX512=OFF -DGGML_AVX512_VBMI=OFF -DGGML_AVX512_VNNI=OFF -DGGML_AVX512_BF16=OFF -DGGML_AVX_VNNI=OFF -DGGML_AMX_TILE=OFF -DGGML_AMX_INT8=OFF -DGGML_AMX_BF16=OFF",
+      "cmake --build build-haswell --target ggml-cpu -j1",
+      "cmake -S source -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-I/app/include -DCMAKE_SKIP_RPATH=TRUE -DWHISPER_BUILD_IS_DEV=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_SERVER=ON -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_SSE42=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_BMI2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BACKEND_DL=ON -DBUILD_SHARED_LIBS=ON -DWHISPER_CURL=OFF -DWHISPER_BUILD_COMMIT=927cfce34f31707e17f2bff35c349632fb9e2c3a -DCMAKE_PREFIX_PATH=/app -DVulkan_GLSLC_EXECUTABLE=/run/build/whisper-vulkan/glslc-serial -DGGML_CPU_ALL_VARIANTS=OFF -DGGML_AVX512=OFF -DGGML_AVX512_VBMI=OFF -DGGML_AVX512_VNNI=OFF -DGGML_AVX512_BF16=OFF -DGGML_AVX_VNNI=OFF -DGGML_AMX_TILE=OFF -DGGML_AMX_INT8=OFF -DGGML_AMX_BF16=OFF",
+      "cmake --build build --target whisper-cli whisper-server -j1",
+      "c++ -O2 -std=c++17 -I source/ggml/include probe-devices.cpp -L build/bin -Wl,-rpath-link,build/bin -lggml -lggml-base -o whisper-vulkan-devices",
+      "install -d /app/libexec/whisper-vulkan/bin /app/libexec/whisper-vulkan/lib /app/libexec/whisper-vulkan/licenses",
+      "install -m755 build/bin/whisper-cli build/bin/whisper-server whisper-vulkan-devices /app/libexec/whisper-vulkan/bin/",
+      "cp -a build/bin/libggml-base.so* build/bin/libggml.so* build/bin/libwhisper.so* /app/libexec/whisper-vulkan/lib/",
+      "install -m755 build/bin/libggml-cpu.so /app/libexec/whisper-vulkan/bin/libggml-cpu-x64.so",
+      "install -m755 build-haswell/bin/libggml-cpu.so /app/libexec/whisper-vulkan/bin/libggml-cpu-haswell.so",
+      "install -m755 build/bin/libggml-vulkan.so /app/libexec/whisper-vulkan/bin/libggml-vulkan.so",
+      "install -m644 source/LICENSE /app/libexec/whisper-vulkan/licenses/whisper.cpp-MIT.txt",
+      "install -m755 whisper-cli-wrapper /app/libexec/whisper-vulkan/whisper-cli",
+      "install -m755 whisper-server-wrapper /app/libexec/whisper-vulkan/whisper-server",
+      "install -m755 whisper-vulkan-devices-wrapper /app/libexec/whisper-vulkan/whisper-vulkan-devices"
+    ],
+    "sources": [
+      {
+        "type": "archive",
+        "url": "https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/927cfce34f31707e17f2bff35c349632fb9e2c3a",
+        "sha256": "41b664fee09e79176ac277b5237debec34f8d74af3c7d71f333f1ec67989ecde",
+        "dest": "source"
+      },
+      {
+        "type": "file",
+        "path": "whisper-probe-devices.cpp",
+        "dest-filename": "probe-devices.cpp"
+      },
+      {
+        "type": "script",
+        "dest-filename": "glslc-serial",
+        "commands": [
+          "exec flock /tmp/phimthai-whisper-glslc.lock /usr/bin/glslc \"$@\""
+        ]
+      },
+      {
+        "type": "script",
+        "dest-filename": "whisper-cli-wrapper",
+        "commands": [
+          "set -eu",
+          "phimthai_runtime_dir=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"",
+          "export LD_LIBRARY_PATH=\"$phimthai_runtime_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"",
+          "cd \"$phimthai_runtime_dir/bin\"",
+          "exec \"$phimthai_runtime_dir/bin/whisper-cli\" \"$@\""
+        ]
+      },
+      {
+        "type": "script",
+        "dest-filename": "whisper-server-wrapper",
+        "commands": [
+          "set -eu",
+          "phimthai_runtime_dir=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"",
+          "export LD_LIBRARY_PATH=\"$phimthai_runtime_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"",
+          "cd \"$phimthai_runtime_dir/bin\"",
+          "exec \"$phimthai_runtime_dir/bin/whisper-server\" \"$@\""
+        ]
+      },
+      {
+        "type": "script",
+        "dest-filename": "whisper-vulkan-devices-wrapper",
+        "commands": [
+          "set -eu",
+          "phimthai_runtime_dir=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"",
+          "export LD_LIBRARY_PATH=\"$phimthai_runtime_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"",
+          "cd \"$phimthai_runtime_dir/bin\"",
+          "exec \"$phimthai_runtime_dir/bin/whisper-vulkan-devices\" \"$@\""
+        ]
+      },
+      {
+        "type": "file",
+        "path": "whisper-cpu-os-avx.patch"
+      }
+    ]
+  }
+]

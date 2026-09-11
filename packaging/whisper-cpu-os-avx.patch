@@ -1,0 +1,28 @@
+--- a/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp
++++ b/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp
+@@ -260,11 +260,23 @@
+ #endif
+ 
+ static int ggml_backend_cpu_x86_score() {
+-    // FIXME: this does not check for OS support
+-
+     int score = 1;
+     cpuid_x86 is;
+ 
++#if defined(GGML_AVX) || defined(GGML_AVX2) || defined(GGML_FMA) || defined(GGML_F16C)
++    // CPUID alone does not prove the OS saves XMM/YMM register state.
++    // This scorer is compiled for the baseline ISA, before an AVX backend runs.
++    if (!is.OSXSAVE() || !is.AVX()) { return 0; }
++#ifdef _MSC_VER
++    const unsigned long long xcr0 = _xgetbv(0);
++#else
++    unsigned int xcr0_low, xcr0_high;
++    __asm__ volatile ("xgetbv" : "=a" (xcr0_low), "=d" (xcr0_high) : "c" (0));
++    const unsigned long long xcr0 = (static_cast<unsigned long long>(xcr0_high) << 32) | xcr0_low;
++#endif
++    if ((xcr0 & 0x6) != 0x6) { return 0; }
++#endif
++
+ #ifdef GGML_FMA
+     if (!is.FMA()) { return 0; }
+     score += 1;

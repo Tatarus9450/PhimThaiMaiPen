@@ -1,0 +1,21 @@
+{
+  "module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/__init__.py",
+  "version": "2.0.0.dev1",
+  "pages": [
+    "transcript",
+    "models",
+    "settings",
+    "diagnostics"
+  ],
+  "minimum_window": [
+    820,
+    600
+  ],
+  "temporary_audio_directory_removed": true,
+  "scope": "Installed native package; offscreen UI, real MainWindow with menu/tray setup, isolated XDG paths, no microphone or clipboard offer",
+  "module_hashes": {
+    "phimthai.audio": "edca868de46366543dcfc29326e05e8ceacff8fcf642110f543049c22c5ec307",
+    "phimthai.pulse_guard": "656d5aba0d1e90350aa926141613e03ffde5178e7c27a1c16e1641f77046e57d",
+    "phimthai.portals": "9c5b9f5212ad6d44975cad2a044eedd61f14316ec1e8ba5c8517372c07be52fb"
+  }
+}

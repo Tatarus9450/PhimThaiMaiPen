@@ -1,0 +1,3 @@
+# Unified-diff context prefixes and format-patch footers contain literal spaces.
+# Keep upstream patch bytes intact rather than stripping meaningful patch data.
+*.patch -whitespace

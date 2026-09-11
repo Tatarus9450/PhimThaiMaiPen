@@ -1,0 +1,210 @@
+{
+  "date": "2026-09-12",
+  "scope": "Native offscreen MainWindow + actual Recorder/PulseSourceGuard; ASR submission boundary spied, no model inference",
+  "input": "/home/task/Documents/PhimThaiMaiPen/.cache/benchmark/10021525843523202225.wav",
+  "input_sha256": "d3c1f7278bb82f716a5ef7b804959d3ad655cf4790be0fc432a12de962d8a2d8",
+  "input_duration": 8.82,
+  "virtual_sink": "phimthai_native_proof_0e31f8f2f3de",
+  "virtual_source": "phimthai_native_proof_0e31f8f2f3de_source",
+  "defaults_before": {
+    "source": "alsa_input.pci-0000_03_00.6.HiFi__Mic1__source",
+    "sink": "alsa_output.pci-0000_03_00.6.HiFi__Speaker__sink"
+  },
+  "host_defaults_changed_by_script": false,
+  "physical_microphone_selected": false,
+  "tests": [
+    {
+      "mode": "capture",
+      "qt_version": "6.11.2",
+      "python": "/home/task/Documents/PhimThaiMaiPen/.venv/bin/python",
+      "module": "/home/task/Documents/PhimThaiMaiPen/phimthai/audio.py",
+      "module_sha256": "edca868de46366543dcfc29326e05e8ceacff8fcf642110f543049c22c5ec307",
+      "guard_sha256": "285051f28bda1c9444ffb0195f862ca6509a5b6b8c1f7ead6f83293090fbd0e7",
+      "qt_libraries": {
+        "/home/task/Documents/PhimThaiMaiPen/.venv/lib/python3.11/site-packages/PySide6/Qt/lib/libQt6Multimedia.so.6": "8ae55c7564609f5ac1498c98bccba25e4c1d6b5a37eee30229c1473a342b68f6"
+      },
+      "source": "phimthai_native_proof_0e31f8f2f3de_source",
+      "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+      "captured": true,
+      "capture_failed": false,
+      "recording": false,
+      "errors": [],
+      "error_observations": [],
+      "maximum_level_percent": 10,
+      "audio": {
+        "duration": 9.984,
+        "frames": 159744,
+        "rate": 16000,
+        "channels": 1,
+        "sample_width": 2,
+        "sha256": "59fb04c8d7e8a454d77ea4d053725d89c01512f3a3c0c3482e552aef65ae3ad3"
+      },
+      "asr_submissions": 1,
+      "source_stopped": true,
+      "guard_stopped": true,
+      "temporary_audio_removed_after_error": false,
+      "wall_seconds": 10.052740784994967,
+      "passed": true,
+      "child_exit": 0,
+      "ready": {
+        "pid": 255156,
+        "guard_pid": 255167,
+        "guard_identity": [
+          "phimthai_native_proof_0e31f8f2f3de_source",
+          1477
+        ],
+        "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+        "guard_start_ticks": "4250971"
+      },
+      "action": null,
+      "stderr": "qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later\nThis plugin does not support propagateSizeHints()\n",
+      "stdout": "",
+      "player_pid": 255175,
+      "guard_after_child_exit": "absent"
+    },
+    {
+      "mode": "disconnect",
+      "qt_version": "6.11.2",
+      "python": "/home/task/Documents/PhimThaiMaiPen/.venv/bin/python",
+      "module": "/home/task/Documents/PhimThaiMaiPen/phimthai/audio.py",
+      "module_sha256": "edca868de46366543dcfc29326e05e8ceacff8fcf642110f543049c22c5ec307",
+      "guard_sha256": "285051f28bda1c9444ffb0195f862ca6509a5b6b8c1f7ead6f83293090fbd0e7",
+      "qt_libraries": {
+        "/home/task/Documents/PhimThaiMaiPen/.venv/lib/python3.11/site-packages/PySide6/Qt/lib/libQt6Multimedia.so.6": "8ae55c7564609f5ac1498c98bccba25e4c1d6b5a37eee30229c1473a342b68f6"
+      },
+      "source": "phimthai_native_proof_0e31f8f2f3de_source",
+      "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+      "captured": false,
+      "capture_failed": true,
+      "recording": false,
+      "errors": [
+        "Selected microphone disconnected. Recording discarded."
+      ],
+      "error_observations": [
+        {
+          "monotonic": 39350.278719679,
+          "recording": false,
+          "source_stopped": true,
+          "guard_stopped": true,
+          "asr_submissions": 0
+        }
+      ],
+      "maximum_level_percent": 10,
+      "audio": null,
+      "asr_submissions": 0,
+      "source_stopped": true,
+      "guard_stopped": true,
+      "temporary_audio_removed_after_error": true,
+      "wall_seconds": 1.0661129479994997,
+      "passed": true,
+      "child_exit": 0,
+      "ready": {
+        "pid": 255305,
+        "guard_pid": 255319,
+        "guard_identity": [
+          "phimthai_native_proof_0e31f8f2f3de_source",
+          1477
+        ],
+        "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+        "guard_start_ticks": "4251997"
+      },
+      "action": {
+        "source_output": "1515",
+        "safe_monitor_index": 1470,
+        "removed_source_index": 1477,
+        "monotonic": 39350.272532326
+      },
+      "stderr": "qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later\nThis plugin does not support propagateSizeHints()\n",
+      "stdout": "",
+      "player_pid": 255323,
+      "guard_after_child_exit": "absent",
+      "action_to_error_seconds": 0.006187352999404538
+    },
+    {
+      "mode": "monitor_exit",
+      "qt_version": "6.11.2",
+      "python": "/home/task/Documents/PhimThaiMaiPen/.venv/bin/python",
+      "module": "/home/task/Documents/PhimThaiMaiPen/phimthai/audio.py",
+      "module_sha256": "edca868de46366543dcfc29326e05e8ceacff8fcf642110f543049c22c5ec307",
+      "guard_sha256": "285051f28bda1c9444ffb0195f862ca6509a5b6b8c1f7ead6f83293090fbd0e7",
+      "qt_libraries": {
+        "/home/task/Documents/PhimThaiMaiPen/.venv/lib/python3.11/site-packages/PySide6/Qt/lib/libQt6Multimedia.so.6": "8ae55c7564609f5ac1498c98bccba25e4c1d6b5a37eee30229c1473a342b68f6"
+      },
+      "source": "phimthai_native_proof_0e31f8f2f3de_source",
+      "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+      "captured": false,
+      "capture_failed": true,
+      "recording": false,
+      "errors": [
+        "Microphone monitoring stopped. Recording discarded; check your audio service."
+      ],
+      "error_observations": [
+        {
+          "monotonic": 39351.50207621,
+          "recording": false,
+          "source_stopped": true,
+          "guard_stopped": true,
+          "asr_submissions": 0
+        }
+      ],
+      "maximum_level_percent": 10,
+      "audio": null,
+      "asr_submissions": 0,
+      "source_stopped": true,
+      "guard_stopped": true,
+      "temporary_audio_removed_after_error": true,
+      "wall_seconds": 0.9945140749987331,
+      "passed": true,
+      "child_exit": 0,
+      "ready": {
+        "pid": 255368,
+        "guard_pid": 255386,
+        "guard_identity": [
+          "phimthai_native_proof_0e31f8f2f3de_source",
+          1539
+        ],
+        "source_id": "7068696d746861695f6e61746976655f70726f6f665f3065333166386632663364655f736f75726365",
+        "guard_start_ticks": "4252127"
+      },
+      "action": {
+        "monotonic": 39351.50098498,
+        "pid": 255386
+      },
+      "stderr": "qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later\nThis plugin does not support propagateSizeHints()\n",
+      "stdout": "",
+      "player_pid": 255390,
+      "guard_after_child_exit": "absent",
+      "action_to_error_seconds": 0.001091230005840771
+    }
+  ],
+  "owned_module_ids": [
+    "536870916",
+    "536870917"
+  ],
+  "cleanup": {
+    "owned_modules_removed": true,
+    "errors": [],
+    "child_stopped": true,
+    "player_stopped": true,
+    "owned_guards_reaped": true
+  },
+  "error": null,
+  "complete": true,
+  "disconnect_fixture_limit": "Before source removal, only this child's source-output is moved onto its own null-sink monitor. This prevents physical-default migration. It tests removal/discard, not which notification wins an automatic stream-migration race.",
+  "temporary_directory": "/tmp/phimthai-native-audio-proof-ec4axq4s",
+  "defaults_after": {
+    "source": "alsa_input.pci-0000_03_00.6.HiFi__Mic1__source",
+    "sink": "alsa_output.pci-0000_03_00.6.HiFi__Speaker__sink"
+  },
+  "defaults_preserved": true,
+  "temporary_directory_removed": true,
+  "proof_script_sha256": "3b1e76b9f96598d54e2a1dfa836aef27a9464f8aa8dd5a7486e6e71f59d4af51",
+  "normal_capture_is_submission_boundary_only": true,
+  "limits": [
+    "Only owned virtual PulseAudio devices were used; no physical microphone capture or host default changes",
+    "ASR submission is a spy: normal capture reaches the real application submission boundary once, failure cases never reach it; no model inference ran",
+    "The disconnect fixture routes only its recording stream to its own null monitor before deleting the selected source; it does not measure a race against automatic migration to another input",
+    "Subscription termination is tested; abrupt GUI process death and PDEATHSIG cleanup are not induced by this proof",
+    "Native bundled Qt6.11.2 on this exact Fedora host; other audio services, Qt versions and Linux desktops remain separate checks"
+  ]
+}

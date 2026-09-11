@@ -1,145 +1,133 @@
-# Phim Thai Mai Pen
+# PhimThaiMaiPen 2.0 · พิมพ์ไทยไม่เป็น
 
-Linux Thai Voice Typing HotKey
+แอปพิมพ์ด้วยเสียงไทย–อังกฤษสำหรับ Linux เลือกโมเดล รับเสียงจากไมค์หรือไฟล์ ตรวจแก้ข้อความ แล้วคัดลอกหรือวางลงแอปอื่น ถอดเสียงและแปลในเครื่องหลังดาวน์โหลดโมเดล
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/29660b40-78aa-4a22-9727-46f81606c7ef" alt="Phim Thai Mai Pen Banner" />
-</p>
+**Local Thai and English voice typing for Linux** — editable transcripts, selectable models, microphone settings, and offline Thai-to-English translation
 
-ระบบพิมพ์ด้วยเสียงบน Linux สำหรับพูดภาษาไทย, ไทยปนอังกฤษ, และแปลไทยเป็นอังกฤษก่อนพิมพ์ลงแอปที่กำลังใช้งานอยู่
+รุ่นปัจจุบัน `2.0.0.dev1` ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังระบุความเข้ากันได้เป็นรายโมเดลและอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
 
-Linux voice typing for Thai speech, Thai-English mixed speech, and Thai-to-English translation before inserting text into the app you are currently using.
-
-ใช้ [Typhoon ASR](https://github.com/scb-10x/typhoon-asr) เป็น backend หลัก และรันงานถอดเสียงกับแปลภาษาในเครื่องของคุณเอง
-
-It uses [Typhoon ASR](https://github.com/scb-10x/typhoon-asr) as the main backend and runs transcription plus translation locally on your machine.
-
----
-
-## โปรแกรมนี้มีประโยชน์อะไร / Why Use It
-
-1. เพิ่มระบบการพิมพ์ด้วยเสียงบน Linux ให้ฟีลใกล้เคียงกับที่หลายคนคุ้นจาก Windows Adds voice typing to Linux with a feel closer to what many people know from Windows.
-2. เหมาะกับคนไทยสุด ๆ และพยายามให้ใช้งานได้กับแทบทุกหน้าต่างทุกโปรแกรมในเครื่องนี้ แต่อาจมีบัคหรือแอปบางตัวดื้อบ้าง Very Thai-focused and intended to work across almost any app window on your machine, although some bugs or stubborn apps are expected.
-3. มีบัคแน่นอน เอาไว้ค่อยแก้ Bugs definitely exist. We can fix them later.
-
----
+![Transcript editor](docs/screenshots/transcript.png)
 
 ## ติดตั้ง / Install
+
+ต้องมี **Python 3.11–3.13 พร้อม venv**, **FFmpeg**, **patch**, **pactl** และระบบเสียง PulseAudio หรือ PipeWire ที่เปิดบริการ PulseAudio compatibility ติดตั้งแพ็กเกจเหล่านี้จากตัวจัดการแพ็กเกจของ Linux ก่อน ส่วนปุ่มลัดและการวางอัตโนมัติต้องมี `xdg-desktop-portal` พร้อม backend ของเดสก์ท็อป
 
 ```bash
 git clone https://github.com/Tatarus9450/PhimThaiMaiPen.git
 cd PhimThaiMaiPen
-chmod +x install.sh
-./install.sh
+python3 scripts/install-app.py
 ```
 
-ตอนรัน `./install.sh` ให้ตอบเป็นตัวเลข:
+จากนั้นเปิด **PhimThaiMaiPen** จากเมนูแอป ตัวติดตั้งเลือก Python ที่รองรับ สร้าง `.venv-app` ติดตั้ง PyTorch รุ่น CPU และเพิ่ม launcher สำหรับผู้ใช้ปัจจุบัน ไม่ใช้ sudo ไม่แก้ Python ของระบบ และยังไม่ดาวน์โหลดโมเดล
 
-When `./install.sh` starts, answer with a number:
-
-- `1` ติดตั้งหรือซ่อมโปรแกรมนี้ - install or repair the program
-- `2` ถอนการติดตั้ง - uninstall
-
-ถ้าคุณเปลี่ยนจาก X11 ไป Wayland หรือเปลี่ยน desktop environment ภายหลัง ให้รัน `./install.sh` ใหม่อีกครั้ง
-
-If you later switch between X11 and Wayland, or change desktop environments, run `./install.sh` again.
-
-ถ้าต้องการตรวจระบบหลังติดตั้งเอง ให้รัน `python3 self_check.py`
-
-If you want to run a manual health check after installation, run `python3 self_check.py`
-
----
-
-## วิธีใช้งาน / How To Use
-
-| Shortcut | Action |
-| :--- | :--- |
-| `Meta + H` | เริ่มหรือหยุดการอัดเสียง / Start or stop recording |
-| `Meta + Shift + H` | เปลี่ยนโหมดการพิมพ์ / Change the dictation mode |
-** ปุ่ม Meta คือปุ่มที่มีโลโก้ Windows ที่อยู่บนคีย์บอร์ดกันเกือบทุกคนเลยนะ หรือบางคนมีเขียนไว้แค่คําว่า WIN
-
-วิธีใช้งาน:
-
-Usage flow:
-
-1. วางเคอร์เซอร์ในแอปที่ต้องการพิมพ์. Place your cursor in the target app.
-2. ถ้าต้องการ เปลี่ยนโหมดด้วย `Meta + Shift + H`. If needed, change the mode with `Meta + Shift + H`.
-3. กด `Meta + H` เพื่อเริ่มอัดเสียง. Press `Meta + H` to start recording.
-4. พูดใส่ไมโครโฟน. Speak into your microphone.
-5. กด `Meta + H` อีกครั้งเพื่อหยุดอัด. Press `Meta + H` again to stop recording.
-6. ระบบจะถอดเสียงหรือแปลภาษา แล้วพิมพ์กลับเข้าแอปให้อัตโนมัติ. The app transcribes or translates your speech and inserts the text back into the target app.
-
----
-
-## โหมดการใช้งาน / Modes
-
-- `Smart Mix` ใช้สำหรับพูดไทยที่มีคำอังกฤษปน. For Thai speech with mixed English terms.
-- `Raw` ใช้เมื่ออยากได้ข้อความแบบตรงที่สุด. For the most direct raw transcription.
-- `TH to ENG` ใช้เมื่อพูดภาษาไทย แต่ต้องการผลลัพธ์เป็นภาษาอังกฤษ. For speaking Thai but getting English output.
-
-ใน popup:
-
-In the popup:
-
-- `MIX` = `Smart Mix`
-- `RAW` = `Raw`
-- `TH>ENG` = `TH to ENG`
-
----
-
-## หลักการทำงาน / How It Works
-
-1. ผู้ใช้วางเคอร์เซอร์ไว้ในแอปที่ต้องการพิมพ์ แล้วกด `Meta + H` เพื่อเริ่มทำงาน. The user places the cursor in the target app and presses `Meta + H` to begin.
-2. โปรแกรมรับคำสั่งจาก hotkey แล้วเริ่มอัดเสียงจากไมโครโฟนผ่าน `arecord`. The app receives the hotkey trigger and starts recording from the microphone through `arecord`.
-3. ถ้าผู้ใช้กด `Meta + Shift + H` ก่อนหรือระหว่างใช้งาน โปรแกรมจะเปลี่ยนโหมดเป็น `Smart Mix`, `Raw`, หรือ `TH to ENG`. If the user presses `Meta + Shift + H` before or between runs, the app switches the active profile to `Smart Mix`, `Raw`, or `TH to ENG`.
-4. เมื่อผู้ใช้กด `Meta + H` อีกครั้ง โปรแกรมจะหยุดอัดเสียงแล้วส่งไฟล์เสียงไปให้ local worker. When the user presses `Meta + H` again, the app stops recording and sends the audio file to the local worker.
-5. worker จะเตรียมไฟล์เสียงให้อยู่ในรูปแบบที่เหมาะกับโมเดล แล้วส่งเข้า Typhoon ASR เพื่อถอดเสียง. The worker normalizes the audio into the model-ready format and sends it to Typhoon ASR for transcription.
-6. ถ้าอยู่ในโหมด `Smart Mix` ระบบจะจัดรูปข้อความและใช้ replacement rules เพิ่มเติม. If the active profile is `Smart Mix`, the app formats the text and applies replacement rules.
-7. ถ้าอยู่ในโหมด `TH to ENG` ระบบจะถอดเสียงภาษาไทยก่อน แล้วแปลผลลัพธ์เป็นภาษาอังกฤษในเครื่อง. If the active profile is `TH to ENG`, the app first transcribes Thai speech and then translates the result to English locally.
-8. เมื่อได้ข้อความสุดท้ายแล้ว โปรแกรมจะคัดลอกข้อความลง clipboard ก่อน แล้วพยายาม paste กลับเข้าแอปที่กำลังโฟกัสอยู่; ถ้า paste ไม่สำเร็จ ข้อความจะยังค้างอยู่ใน clipboard ให้ผู้ใช้ paste เอง. Once the final text is ready, the app copies it to the clipboard first and then tries to paste it back into the focused application; if the paste fails, the text remains in the clipboard for manual paste.
-
----
-
-## หมายเหตุ / Quick Notes
-
-- runtime ของการถอดเสียงและแปลภาษาเป็น local. Runtime transcription and translation are local.
-- บน Wayland บางแอปอาจต้อง paste เองจาก clipboard ถ้า auto-paste ถูกบล็อก. On Wayland, some apps may require manual paste from the clipboard if auto-paste is blocked.
-- ถ้า auto-paste สำเร็จ โปรแกรมจะคืนค่า clipboard เดิม; ถ้า auto-paste ไม่สำเร็จ ข้อความล่าสุดจะค้างอยู่ใน clipboard ให้ paste เอง. If auto-paste succeeds, the app restores the previous clipboard contents; if auto-paste fails, the latest text remains in the clipboard for manual paste.
-- ถ้า hotkey ยังไม่ทำงานหลังติดตั้ง ให้ logout/login ใหม่ก่อน. If shortcuts do not work immediately after install, try logging out and back in first.
-
----
-
-## self_check.py ใช้ทำอะไร ใช้ยังไง / What self_check.py Is For? How to Use?
-
-`self_check.py` มีไว้เช็กแบบเร็ว ๆ ว่าโปรแกรมยังพร้อมใช้งานอยู่หรือไม่ เช่น dependency หลัก, worker, popup, การถอดเสียง, และการแปลภาษา โดยเอาไว้ตรวจสอบว่าโปรแกรมตัวนี้สามารถทำงานได้ถูกต้องกับเครื่องคอมพิวเตอร์ตอนนี้หรือไม่; หากมีข้อผิดพลาด คุณจะได้ตัดสินใจซ่อมโปรแกรมนี้ได้ทันที หรือถ้าคุณใจดีจะช่วยแจ้งปัญหาการใช้งานให้ผู้พัฒนาก็ได้
-
-`self_check.py` is a quick health check to see whether the app is still ready to use on the current computer, including the main dependencies, worker, popup, transcription, and translation paths; if something is broken, you can decide to repair it right away, or report the issue to the developer if you feel generous.
-
-วิธีใช้:
-
-How to use:
+The installer uses a separate environment and a pinned, checksum-verified Qwen source patch. It installs only Qwen's inference dependencies, validates package requirements and imports, and adds a desktop launcher. Keep the checkout and `.venv-app` in place
 
 ```bash
-python3 self_check.py
+# ระบุ Python เอง / Choose Python explicitly
+python3 scripts/install-app.py --python python3.12
+
+# เพิ่ม OpenVINO สำหรับโมเดล Intel / Optional OpenVINO runtime
+python3 scripts/install-app.py --intel
+
+# เปิดจาก terminal / Launch directly
+.venv-app/bin/python -m phimthai
 ```
 
-หรือถ้าอยู่ใน virtualenv:
+Qwen 0.6B ดาวน์โหลดประมาณ 1.89 GB และใช้ RAM สูงสุดราว 5.3–6 GB ในชุดเสียงทดสอบ ควรเผื่อ RAM ให้เดสก์ท็อปและโปรแกรมอื่นด้วย โมเดลขนาดใหญ่ใช้พื้นที่และ RAM เพิ่ม
 
-Or if you are already inside the virtualenv:
+## เริ่มใช้ / First run
+
+1. ไปที่ **Models** เลือก **Qwen3-ASR 0.6B** แล้วกด **Download or repair**
+2. ไปที่ **Settings** เลือกไมค์ กด **Test microphone** และดูระดับเสียง
+3. กด **Record** พูด แล้วกด **Stop** รอข้อความในหน้าตรวจแก้
+4. แก้ข้อความ กด **Copy** แล้ววางเอง หรือเปิด **Enable paste permission** และตอบหน้าขอสิทธิ์ของเดสก์ท็อป
+5. เมื่อกด **Paste** แอปจะย่อลง ให้สลับไปช่องข้อความปลายทางภายใน 3 วินาที
+
+**Enable shortcut** ให้เดสก์ท็อปตั้งปุ่มลัด ค่าเสนอคือ `Ctrl+Alt+Space` ปุ่มที่ใช้จริงขึ้นอยู่กับการตั้งค่าของเดสก์ท็อป กดซ้ำเพื่อเริ่ม/หยุดบันทึก
+
+เปิด **Restore desktop integration on launch** ก่อนขอสิทธิ์ แล้วกด **Save** หากต้องการจำการตั้งค่า เดสก์ท็อปอาจขอสิทธิ์ใหม่เมื่อเปิดแอป ความสามารถนี้ปิดไว้เป็นค่าเริ่มต้น
+
+| การทำงาน / Action | พฤติกรรม / Behavior |
+| --- | --- |
+| Open audio | เปิด WAV, MP3, FLAC, OGG หรือ M4A โดยไม่ใช้ไมค์ |
+| Cancel | หยุดงานและ process ลูก ยกเลิกการวางที่ยังนับถอยหลัง |
+| Retry | ถอดเสียงล่าสุดอีกครั้งด้วยค่าปัจจุบันใน Settings |
+| Translate | แปลข้อความใน editor เป็นอังกฤษ ต้องโหลดโมเดล Thai → English แยก |
+| Smart Mix / Raw | ปรับข้อความตามกฎและพจนานุกรมส่วนตัว หรือใช้ผลถอดเสียงตรงๆ |
+| Clear transcript and temporary audio | ล้างข้อความและเสียงชั่วคราวของ session ปัจจุบัน (`Ctrl+L`) |
+| Quit | ออกจากแอปทั้งหมด (`Ctrl+Q`); หากมี system tray การปิดหน้าต่างจะซ่อนไว้ใน tray |
+
+Editor รองรับ Undo การตั้งค่าใหม่ใช้กับงานถัดไป งานที่กำลังทำยังใช้ค่าเดิม แอปปล่อยโมเดลจาก RAM หลังว่าง 5 นาที จึงอาจใช้เวลาโหลดใหม่ในครั้งต่อไป
+
+## โมเดลและอุปกรณ์ / Models and devices
+
+| Model | การใช้งานและผลทดสอบ / Status |
+| --- | --- |
+| Qwen3-ASR 0.6B | ไทย อังกฤษ และภาษาผสม; CPU ผ่านการทดสอบจริง เป็นค่าเริ่มต้น |
+| Qwen3-ASR 1.7B | ตัวเลือกใหญ่ขึ้น ~4.71 GB; ยังไม่ได้ยืนยัน inference บนเครื่องทดสอบนี้ |
+| Whisper Tiny / Turbo INT8, OpenVINO | CPU ผ่านแล้ว; Intel GPU/NPU ต้องทดสอบกับฮาร์ดแวร์ที่รองรับ; Tiny แม่นภาษาไทยต่ำในชุดทดสอบ |
+| Whisper Turbo Q5, Vulkan | Radeon 840M ผ่านจริง พร้อม CPU สำรองที่ใช้โมเดลเดิม; ต้องติดตั้ง runtime เพิ่ม |
+| Whisper Turbo, AMD NPU | Ryzen AI 5 340 ผ่านจริงกับ FastFlowLM ที่แก้ไขแล้ว; ภาษาไทย/ภาษาผสมยังทดลอง ต้องมี driver และ runtime ที่เข้ากันได้ |
+| OPUS Thai → English | แปลในเครื่อง แบ่งข้อความยาวเป็นช่วงสั้นเพื่อรักษาเนื้อหา ควรตรวจคำแปลก่อนใช้ |
+
+**Auto** เริ่มจาก CPU จนมีข้อมูลวัดความเร็วที่เทียบกันได้บนเครื่องนั้น ส่วน AMD NPU ต้องเลือกเอง การตรวจพบ `/dev/accel` อย่างเดียวไม่ทำให้ขึ้นสถานะพร้อมถอดเสียง
+
+ตัวติดตั้งมาตรฐานใช้ **CPU PyTorch** หากต้องการ CUDA ให้ติดตั้ง PyTorch ที่ตรงกับระบบของคุณใน `.venv-app` ตาม[เอกสาร PyTorch](https://pytorch.org/get-started/locally/) แล้วเลือก GPU โมเดล Qwen ใช้ CUDA; AMD/Intel GPU ทั่วไปใช้ backend อื่นตามตาราง การรันตัวติดตั้งอีกครั้งจะกลับไปใช้ CPU PyTorch
+
+Vulkan และ AMD NPU เป็นส่วนเสริมสำหรับผู้ทดสอบ runtime ไม่ได้มากับตัวติดตั้งมาตรฐาน ดูไฟล์ recipe/patch ใน [`packaging/`](packaging/) และ [หลักฐานฮาร์ดแวร์](docs/HARDWARE.md) แอปจะแจ้งเมื่อ runtime ขาด และแสดงอุปกรณ์ที่ใช้งานจริงหลังจบงาน
+
+[Compatibility matrix](docs/COMPATIBILITY.md) แยกผลที่ทดสอบแล้วออกจากระบบที่ยังไม่มีหลักฐาน รวมถึง GNOME/X11, Intel NPU และ CUDA
+
+## ข้อมูลและคลิปบอร์ด / Privacy
+
+- ประวัติเสียงและข้อความ **ปิดเป็นค่าเริ่มต้น** และเปิดเก็บแยกกันได้
+- เสียงล่าสุดอยู่ในโฟลเดอร์ชั่วคราวส่วนตัวสำหรับ Retry เสียงเก่าจะถูกล้างหลังจบงานหรือเกิดข้อผิดพลาด และล้างทั้งหมดเมื่อออกจากแอปตามปกติ
+- **Copy** ตั้งใจเก็บข้อความไว้ในคลิปบอร์ด ส่วน **Paste** คืนข้อมูล MIME เดิมหลังส่งปุ่มวาง หากคุณคัดลอกสิ่งใหม่ระหว่างนั้น แอปจะเก็บสิ่งใหม่ไว้
+- แอปส่ง MIME hint ให้ Klipper ไม่เก็บข้อความชั่วคราว ประวัติของ clipboard manager อื่นต้องตรวจแยก
+- การดาวน์โหลดโมเดลใช้ revision ที่ตรึงไว้และตรวจ hash ก่อนใช้ ไม่มีการส่งเสียงหรือข้อความไปถอดบนเซิร์ฟเวอร์
+- Token สำหรับจำสิทธิ์เดสก์ท็อปเก็บในไฟล์ส่วนตัว และลบเมื่อปิดตัวเลือกแล้วกด Save
+
+Native paths: `~/.config/phimthai/` สำหรับ settings และสิทธิ์เดสก์ท็อป; `~/.local/share/phimthai/` สำหรับโมเดล ประวัติ และ runtime โดยรองรับ `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
+
+## อัปเดตและแก้ปัญหา / Update and troubleshoot
+
+ออกจากแอปด้วย **Quit** ก่อนอัปเดต แล้วรัน:
 
 ```bash
-./.venv/bin/python self_check.py
+git pull --ff-only
+python3 scripts/install-app.py
 ```
 
-หมายเหตุ:
+โมเดลและข้อมูลผู้ใช้อยู่แยกจากตัวโปรแกรม จึงไม่ต้องโหลดโมเดลใหม่ทุกครั้ง หากย้าย checkout ให้รันตัวติดตั้งใหม่เพื่อแก้ path ของ launcher
 
-Notes:
+| อาการ | วิธีตรวจ |
+| --- | --- |
+| ไม่มีไมค์หรือไมค์หลุด | ดู Diagnostics และระบบเสียง เลือกไมค์ที่ยังเชื่อมต่อ แล้วลอง Test microphone ใหม่ |
+| เปิดหน้าแอปไม่ได้ | ตรวจ Python ที่รองรับและ shared libraries ของ Qt/X11/Wayland จากข้อความผิดพลาดใน terminal |
+| ไม่พบคำพูดทั้งที่มีเสียง | ลองปิด VAD ใน Settings และตรวจระดับไมค์ |
+| โหลดค้างหรือไฟล์เสีย | กด Cancel download แล้ว Download or repair ต่อได้ |
+| วางหรือปุ่มลัดไม่ได้ | เปิดสิทธิ์ใน Settings และตอบ portal ของเดสก์ท็อป ใช้ Copy ได้หาก portal ไม่มีความสามารถนั้น |
+| ช้าหรือ RAM ไม่พอ | ใช้ Qwen 0.6B, CPU 6 threads หรือน้อยกว่า และหลีกเลี่ยงโหลดหลายโมเดลพร้อมกัน |
 
-- เหมาะกับการใช้หลังติดตั้ง หรือหลังแก้โค้ดบางส่วน Useful after installation or after making code changes.
-- มันไม่ใช่การทดสอบไมโครโฟนจริงทุกครั้ง เพราะ smoke test (ใช้ไฟล์เสียงจำลอง) It is not a full live microphone test every time, because the main smoke test uses a generated audio sample.
+Qt แบบ native มีปัญหาตรวจไมค์หลุดในบางรุ่น แอปจึงใช้ `pactl` ติดตามไมค์ที่เลือก และตรวจซ้ำก่อนส่งเสียงเข้า ASR หากไมค์หายหรือการตรวจล้มเหลว จะยกเลิกการบันทึกชุดนั้น การถอด/เสียบไมค์จริงและการพักเครื่องยังต้องทดสอบเพิ่มตามฮาร์ดแวร์
 
----
+หากต้องการนำ launcher ออก ให้ลบ `~/.local/share/applications/io.github.tatarus9450.PhimThaiMaiPen.desktop` และ `~/.local/share/phimthai/bin/phimthai` แล้วนำ `.venv-app` ออกเมื่อเลิกใช้ เก็บโฟลเดอร์ข้อมูลไว้ได้ หรือใช้ **Clear history** ใน Settings เพื่อลบประวัติที่เลือกเก็บ
+
+## พัฒนาและทดสอบ / Development
+
+```bash
+# หลังใช้ตัวติดตั้ง / After installation
+.venv-app/bin/pip install --no-deps --no-build-isolation -e .
+QT_QPA_PLATFORM=offscreen .venv-app/bin/python -m unittest discover -s tests -v
+.venv-app/bin/python -m unittest test_asr_backend -v
+```
+
+`phimthai/` คือหน้าแอป, worker, ตัวจัดการโมเดลและ backend ส่วน `typhoon_service.py` ใช้ร่วมกับระบบเดิม `install.sh` และปุ่ม `Meta+H` ของระบบเดิมยังเป็นอีกเส้นทางหนึ่ง อ่าน [คู่มือรุ่นเดิม](docs/LEGACY.md) ก่อนเปลี่ยนการใช้งาน
+
+ผลทดสอบจริงอยู่ใน [บันทึกการพัฒนา](docs/IMPLEMENTATION.md) และ [`docs/evidence/`](docs/evidence/) ชุดเสียง FLEURS 4 ไฟล์ให้ข้อความเท่าเดิมเมื่อเปลี่ยนจาก 12 เป็น 6 threads และลดเวลาประมวลผล 43.9% ผลนี้เป็นเพียงชุดทดสอบเล็กบนเครื่องเดียว ไม่ใช่คำรับรองความเร็วทุกภาษาและทุกเครื่อง
+
+งานปัจจุบันเผยแพร่ซอร์สผ่าน GitHub **ยังไม่ส่งขึ้น Flathub/Discover** ไฟล์ Flatpak และงาน source build เก็บไว้เป็นผลทดลองสำหรับพัฒนาภายหลัง อ่าน [บันทึกการแจกแพ็กเกจ](docs/DISTRIBUTION.md)
 
 ## License
 
-MIT
+ตัวแอปใช้ [MIT](LICENSE) โมเดลและไลบรารีใช้สิทธิ์ของแต่ละโครงการ ดู [แหล่งที่มาและใบอนุญาต dependency](docs/SOURCE_BUILD_MATRIX.md) ชุดเสียงทดสอบไม่ได้รวมอยู่ใน repository; สคริปต์และผลวัดระบุแหล่งที่มาและ revision ไว้

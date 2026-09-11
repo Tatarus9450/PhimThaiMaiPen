@@ -1,0 +1,57 @@
+{
+  "dataset": "Google FLEURS",
+  "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+  "license": "CC-BY-4.0",
+  "threads": 6,
+  "model": "Qwen/Qwen3-ASR-0.6B",
+  "startup_seconds": 12.378976651001722,
+  "peak_rss_mib": 6053.8984375,
+  "normalization": "Unicode NFC, lowercase, punctuation replaced with spaces; Thai removes whitespace for CER, English whitespace tokens for WER",
+  "limitation": "Four samples only, not representative or natural code-switching",
+  "samples": [
+    {
+      "language": "th_th",
+      "file": "10021525843523202225.wav",
+      "reference": "Danielle Lantagne ผู้เชี่ยวชาญด้านโรคภัยประจำสหประชาชาติแถลงว่า เป็นไปได้ที่การระบาดของโรคในครั้งนี้เกิดจากเจ้าหน้าที่รักษาความสงบ",
+      "sha256": "d3c1f7278bb82f716a5ef7b804959d3ad655cf4790be0fc432a12de962d8a2d8",
+      "hypothesis": "แจนี ลังชันผู้เชี่ยวชาญด้านโรคภัยประจําสหประชาชาติแถลงว่าเป็นไปได้ที่การระบาดของโรนในครั้งนี้เกิดจากเจ้าหน้าที่รักษาความสงบ",
+      "errors": 19,
+      "units": 127,
+      "processing_time": 9.045551505998446,
+      "duration": 8.82
+    },
+    {
+      "language": "th_th",
+      "file": "10026868752543983818.wav",
+      "reference": "สิ่งนี้เรียกว่าค่า pH ของสารเคมี คุณสามารถสร้างตัวระบุได้โดยใช้น้ำกะหล่ำปลีแดง",
+      "sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+      "hypothesis": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกระหล่ำปีแดง",
+      "errors": 2,
+      "units": 75,
+      "processing_time": 6.074654473002738,
+      "duration": 7.2
+    },
+    {
+      "language": "en_us",
+      "file": "1003119935936341070.wav",
+      "reference": "However, due to the slow communication channels, styles in the west could lag behind by 25 to 30 year.",
+      "sha256": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "hypothesis": "However, due to the slow communication channels, styles in the West could lag behind. By 25 to 30 years.",
+      "errors": 1,
+      "units": 19,
+      "processing_time": 5.026462843998161,
+      "duration": 10.56
+    },
+    {
+      "language": "en_us",
+      "file": "10052240106321793346.wav",
+      "reference": "All nouns, alongside the word Sie for you, always begin with a capital letter, even in the middle of a sentence.",
+      "sha256": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "hypothesis": "All nouns alongside the world say for you always begin with a capital letter, even in the middle of a sentence.",
+      "errors": 2,
+      "units": 21,
+      "processing_time": 3.8474929760013765,
+      "duration": 8.76
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "source_commit": "089e56d29416990e168abed43aff88fc0ad664f3",
+  "source_archive_sha256": "b46d9b43cff8e54a8718440007353a6b9a07ae6716580ad3e0d224a4acec4b27",
+  "boost_source_url": "https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.bz2",
+  "boost_source_sha256": "49551aff3b22cbc5c5a9ed3dbc92f0e23ea50a0f7325b0d198b705e8ee3fc305",
+  "sdk_commit": "94e029e5b32c7d8bb1a44ff4492eca273c9886e55e33d7dba273c75e678353ca",
+  "platform_commit": "3adaa41de78d95076617f743099ec3851b5ae4fcdadbaaa8b7df1412c705c56c",
+  "rust_extension_commit": "09784a9989ae5a7fda6a2280033ca9aa32aac6907961da8b18be4590dd261507",
+  "xrt_headers_origin": "xrt-base-devel-2.25.0-1.x86_64 Fedora44 /opt/xilinx/xrt/include copied locally",
+  "xrt_header_tree_sha256": "29913bb4df4726dca5d527dbebae69ab1352c9adc9e52527c546f47b0f315dc3",
+  "compiler": "GCC15.2.0; rustc1.98.1; CMake4.3.2; KDE SDK6.11",
+  "build_scripts": [
+    "build-boost.sh",
+    "build-flm.sh"
+  ],
+  "status": "built and four-clip NPU ASR verified inside KDE Platform6.11; experimental",
+  "binary_sha256": "a2e1a750fddb851f66956723af971e91970e6d67b296a4987eefb055d0ffcda8",
+  "native_patch_outputs_identical": true,
+  "source_url": "https://codeload.github.com/ROCm/FastFlowLM/tar.gz/089e56d29416990e168abed43aff88fc0ad664f3",
+  "tokenizers_cpp_commit": "acbdc5a27ae01ba74cda756f94da698d40f11dfe",
+  "msgpack_commit": "092bc69b6e815980bce7808595c914dd3a29f905",
+  "sentencepiece_commit": "11051e3b73b3a6222a52acd720e39805dc7545ab",
+  "artifact_kind": "SDK-built current experimental artifact",
+  "built_executable": "flm-real",
+  "module_install_path": "/app/libexec/fastflowlm",
+  "build": "KDE SDK6.11 executes proof/build-boost.sh and proof/build-flm.sh; full command flags retained in scripts",
+  "flatpak_status": "KDE Platform6.11: ready=true; four full FLEURS clips HTTP200; actual accel0 file use. Application end-to-end and public Flathub release not verified.",
+  "quality": "Thai39/202CER errors; English3/40WER errors. Four samples only; not an automatic recommendation."
+}

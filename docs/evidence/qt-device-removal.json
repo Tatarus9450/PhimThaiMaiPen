@@ -1,0 +1,25 @@
+{
+  "backend": "pulseaudio",
+  "qt": "6.11.1",
+  "patched_library_loaded": true,
+  "patched_plugin_loaded": true,
+  "addition_notified": true,
+  "removal_notified": true,
+  "removal_latency_seconds": 0.016,
+  "capture_started": false,
+  "physical_microphone_used": false,
+  "events": [
+    {
+      "event": "ready",
+      "proof_source_present": false
+    },
+    {
+      "event": "changed",
+      "proof_source_present": true
+    },
+    {
+      "event": "changed",
+      "proof_source_present": false
+    }
+  ]
+}

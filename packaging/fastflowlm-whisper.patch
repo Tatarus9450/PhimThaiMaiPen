@@ -1,0 +1,36 @@
+--- upstream/src/common/whisper/modeling_whisper.cpp
++++ patched/src/common/whisper/modeling_whisper.cpp
+@@ -150,6 +150,8 @@
+       
+         // std::cout << "Language detected: " << this->tokenizer->run_time_decoder(last_idx) << "(" << langmap::to_language_name(this->tokenizer->run_time_decoder(last_idx)) << ")" << std::endl;
+         language_detected = this->tokenizer->run_time_decoder(last_idx);
++        // Whisper decoder prefix is SOT, detected language, then task.
++        this->whisper_engine->decode_audio(last_idx);
+ 
+         if (task == e_translate) {
+             //header_print("info", "translate is not supported! Do transcribe instead!");
+@@ -185,16 +187,9 @@
+         int watching_dog = 16;
+         for (int i = 0; i < 448 - 3; i++){
+             buffer<bf16> logits = this->whisper_engine->decode_audio(last_idx);
+-            if (watching_dog == 0 && allow_force_time_stamp){
+-                last_idx = this->_sample_in_time_stamp(logits);
+-                watching_dog = 16;
+-            }
+-            else{
+-                last_idx = this->sampler->sample(logits);
+-                if (watching_dog > 0){
+-                    watching_dog--;
+-                }
+-            }
++            // Let the model emit timestamp boundaries; a fixed token count
++            // cuts languages with many subword tokens into premature spans.
++            last_idx = this->sampler->sample(logits);
+             std::string token_str = this->tokenizer->run_time_decoder(last_idx);
+             
+             if (_is_normal_token(last_idx)){
+@@ -279,4 +274,4 @@
+         logits[i] = -0x1.FEp127f;
+     }
+     return this->sampler->sample(logits);
+-}+}

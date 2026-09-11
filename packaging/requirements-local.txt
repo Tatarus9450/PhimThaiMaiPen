@@ -1,0 +1,13 @@
+# Experimental local Flatpak only. Source-build modules remain a release gate.
+torch==2.11.0+cpu
+PySide6==6.11.1
+dbus-next==0.2.3
+transformers==4.57.6
+accelerate==1.12.0
+numpy==2.4.6
+soundfile==0.14.0
+sentencepiece==0.2.2
+protobuf
+setuptools==81.0.0
+webrtcvad-wheels==2.0.14
+openvino-genai==2026.3.1.0

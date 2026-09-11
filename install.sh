@@ -1085,21 +1085,23 @@ else
     ok "ไม่พบ NVIDIA GPU; จะใช้ PyTorch ที่เหมาะกับ CPU" "No NVIDIA GPU detected; the installer will use CPU-optimized PyTorch"
 fi
 
-upsert_env_key "TYPHOON_MODEL" "scb10x/typhoon-asr-realtime" "$SCRIPT_DIR/config.env"
+upsert_env_key "TYPHOON_MODEL" "Qwen/Qwen3-ASR-0.6B" "$SCRIPT_DIR/config.env"
+upsert_env_key "TYPHOON_ASR_BACKEND" "auto" "$SCRIPT_DIR/config.env"
+upsert_env_key "TYPHOON_ASR_LANGUAGE" "auto" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_TRANSLATE_MODEL" "Helsinki-NLP/opus-mt-th-en" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_DEVICE" "auto" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_CPU_THREADS" "$THREADS" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_VENV" "$VENV_DIR" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_HF_HOME" "$HF_HOME_DIR" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_PROFILE_DEFAULT" "smart" "$SCRIPT_DIR/config.env"
-upsert_env_key "TYPHOON_REQUEST_TIMEOUT" "120" "$SCRIPT_DIR/config.env"
-upsert_env_key "TYPHOON_STARTUP_TIMEOUT" "180" "$SCRIPT_DIR/config.env"
+upsert_env_key "TYPHOON_REQUEST_TIMEOUT" "300" "$SCRIPT_DIR/config.env"
+upsert_env_key "TYPHOON_STARTUP_TIMEOUT" "600" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_FFMPEG_TIMEOUT" "30" "$SCRIPT_DIR/config.env"
 upsert_env_key "TYPHOON_REPLACEMENTS_FILE" "$SCRIPT_DIR/typhoon_replacements.tsv" "$SCRIPT_DIR/config.env"
 upsert_env_key "ARECORD_FORMAT" "S16_LE" "$SCRIPT_DIR/config.env"
 upsert_env_key "ARECORD_CHANNELS" "1" "$SCRIPT_DIR/config.env"
 upsert_env_key "ARECORD_RATE" "16000" "$SCRIPT_DIR/config.env"
-ok "ตั้งค่า Typhoon ให้ใช้ CPU threads จำนวน $THREADS แล้ว" "Configured Typhoon with $THREADS CPU threads"
+ok "ตั้งค่า ASR ให้ใช้ CPU threads จำนวน $THREADS แล้ว" "Configured ASR with $THREADS CPU threads"
 
 # ── 4. Python Environment ──
 step 4 "สร้าง Python environment..." "Creating the Python environment..."
@@ -1114,7 +1116,7 @@ fi
 "$VENV_DIR/bin/python" -m pip install --upgrade pip wheel 'setuptools>=79,<82' >/dev/null
 ok "อัปเกรดเครื่องมือ pip แล้ว" "Upgraded pip tooling"
 
-# ── 5. Install Typhoon ASR ──
+# ── 5. Install Qwen3 ASR ──
 step 5 "ติดตั้ง Python dependencies..." "Installing Python dependencies..."
 
 if [[ "$TORCH_CHANNEL" == "cuda" ]]; then
@@ -1125,16 +1127,16 @@ else
         --extra-index-url https://pypi.org/simple \
         torch==2.11.0 torchaudio==2.11.0
 fi
-"$VENV_DIR/bin/pip" install --upgrade typhoon-asr==0.1.1
-"$VENV_DIR/bin/pip" install --upgrade 'transformers>=4.46,<5' 'sentencepiece>=0.2,<1'
-ok "ติดตั้ง Typhoon และ dependency สำหรับแปลภาษาแล้ว" "Installed Typhoon and translation dependencies"
+"$VENV_DIR/bin/pip" install --upgrade qwen-asr==0.0.6
+"$VENV_DIR/bin/pip" install --upgrade 'transformers==4.57.6' 'sentencepiece>=0.2,<1'
+ok "ติดตั้ง Qwen3-ASR และ dependency สำหรับแปลภาษาแล้ว" "Installed Qwen3-ASR and translation dependencies"
 
 # ── 6. Download Model ──
-step 6 "ดาวน์โหลดและวอร์มโมเดล Typhoon กับโมเดลแปลภาษา..." "Downloading and warming the Typhoon and translation models..."
+step 6 "ดาวน์โหลดและวอร์มโมเดล Qwen3-ASR กับโมเดลแปลภาษา..." "Downloading and warming the Qwen3-ASR and translation models..."
 
 python3 "$SCRIPT_DIR/typhoon_client.py" --stop-service >/dev/null 2>&1 || true
 "$VENV_DIR/bin/python" "$SCRIPT_DIR/typhoon_service.py" --preload-only --preload-translation
-ok "cache และวอร์มโมเดล Typhoon กับโมเดลแปลภาษาแล้ว" "Typhoon and translation models have been cached and warmed"
+ok "cache และวอร์มโมเดล Qwen3-ASR กับโมเดลแปลภาษาแล้ว" "Qwen3-ASR and translation models have been cached and warmed"
 
 # ── 7. Validation ──
 step 7 "ตรวจสอบ runtime ภายในเครื่อง..." "Validating the local runtime..."

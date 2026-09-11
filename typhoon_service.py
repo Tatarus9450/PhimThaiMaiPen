@@ -14,12 +14,11 @@ import time
 import wave
 from pathlib import Path
 
-from typhoon_backend import SERVICE_PID_FILE, SOCKET_FILE, get_active_profile, load_config, normalize_profile
+from typhoon_backend import SERVICE_PID_FILE, SOCKET_FILE, get_active_profile, get_asr_backend, load_config, normalize_profile
 
 CONFIG = load_config()
 MODEL = None
 TORCH = None
-NEMO_ASR = None
 AUTO_MODEL_FOR_SEQ2SEQ_LM = None
 AUTO_TOKENIZER = None
 DEVICE = "cpu"
@@ -56,18 +55,16 @@ def configure_runtime() -> None:
 
 
 def import_runtime_modules() -> None:
-    global TORCH, NEMO_ASR
+    global TORCH
 
-    if TORCH is not None and NEMO_ASR is not None:
+    if TORCH is not None:
         return
 
     configure_runtime()
 
     import torch  # type: ignore
-    import nemo.collections.asr as nemo_asr  # type: ignore
 
     TORCH = torch
-    NEMO_ASR = nemo_asr
 
     threads = int(CONFIG.get("TYPHOON_CPU_THREADS", str(os.cpu_count() or 4)))
     try:
@@ -129,14 +126,27 @@ def load_model() -> None:
 
     import_runtime_modules()
     DEVICE = resolve_device()
-    model_name = CONFIG.get("TYPHOON_MODEL", "scb10x/typhoon-asr-realtime")
+    model_name = CONFIG["TYPHOON_MODEL"]
 
     log(f"Loading model: {model_name} on {DEVICE.upper()}")
-    MODEL = NEMO_ASR.models.ASRModel.from_pretrained(
-        model_name=model_name,
-        map_location=DEVICE,
-    )
-    MODEL.eval()
+    if get_asr_backend(CONFIG) == "qwen":
+        from qwen_asr import Qwen3ASRModel
+
+        MODEL = Qwen3ASRModel.from_pretrained(
+            model_name,
+            dtype=TORCH.float16 if DEVICE == "cuda" else TORCH.float32,
+            device_map=DEVICE,
+            max_inference_batch_size=1,
+            max_new_tokens=1024,
+        )
+    else:
+        import nemo.collections.asr as nemo_asr
+
+        MODEL = nemo_asr.models.ASRModel.from_pretrained(
+            model_name=model_name,
+            map_location=DEVICE,
+        )
+        MODEL.eval()
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
         temp_path = Path(temp_audio.name)
@@ -144,20 +154,20 @@ def load_model() -> None:
         _write_silence_wav(temp_path)
         with MODEL_LOCK:
             with TORCH.inference_mode():
-                MODEL.transcribe(audio=[str(temp_path)])
+                transcribe_loaded(temp_path)
         log("Warm-up completed")
     finally:
         temp_path.unlink(missing_ok=True)
 
 
-def _translate_text_loaded(text: str) -> str:
+def _translate_chunk_loaded(text: str) -> str:
     if not text.strip():
         return ""
 
     inputs = TRANSLATION_TOKENIZER(
         text,
         return_tensors="pt",
-        truncation=True,
+        truncation=False,
         max_length=512,
     )
     if DEVICE == "cuda":
@@ -175,6 +185,20 @@ def _translate_text_loaded(text: str) -> str:
                 max_new_tokens=max_new_tokens,
             )
 
+    eos = getattr(TRANSLATION_MODEL.generation_config, "eos_token_id", None)
+    endings = set(eos if isinstance(eos, list) else [eos])
+    tokens = generated[0].tolist()
+    if len(tokens) >= max_new_tokens and not endings.intersection(tokens[1:]):
+        # A decoder budget is not a successful translation. Retry smaller
+        # source pieces rather than silently accepting an unfinished output.
+        if len(text) <= 1:
+            raise RuntimeError("Translation exceeded its output limit")
+        cut = len(text) // 2
+        space = text.rfind(" ", 0, cut)
+        if space > cut // 2:
+            cut = space + 1
+        return " ".join(_translate_chunk_loaded(part) for part in (text[:cut], text[cut:]) if part.strip())
+
     decoded = TRANSLATION_TOKENIZER.batch_decode(
         generated,
         skip_special_tokens=True,
@@ -184,6 +208,40 @@ def _translate_text_loaded(text: str) -> str:
     translated = re.sub(r"\s+", " ", translated).strip()
     translated = re.sub(r"\s+([,.;:!?%])", r"\1", translated)
     return translated
+
+
+def _translate_text_loaded(text: str) -> str:
+    """Translate every input token; split before tokenization can truncate it."""
+    if not text.strip():
+        return ""
+    # Token boundaries are measured with the actual translation tokenizer.
+    # Split strings rather than decode/re-encode IDs to preserve the source.
+    # Marian is sentence-oriented. Its 512-token encoder limit is not a
+    # reliable paragraph size: 475-token Thai chunks omitted whole clauses in
+    # our coverage probe, while short chunks retained all 25 numeric markers.
+    budget = 40
+    pieces = re.split(r"(?<=[.!?。！？])\s+|\n+", text.strip())
+    chunks = []
+    for piece in pieces:
+        remaining = piece
+        while remaining:
+            if len(TRANSLATION_TOKENIZER.encode(remaining)) <= budget:
+                chunks.append(remaining)
+                break
+            low, high = 1, len(remaining)
+            while low < high:
+                mid = (low + high + 1) // 2
+                if len(TRANSLATION_TOKENIZER.encode(remaining[:mid])) <= budget:
+                    low = mid
+                else:
+                    high = mid - 1
+            cut = low
+            space = remaining.rfind(" ", 0, cut)
+            if space > cut // 2:
+                cut = space + 1
+            chunks.append(remaining[:cut])
+            remaining = remaining[cut:]
+    return " ".join(_translate_chunk_loaded(chunk) for chunk in chunks if chunk.strip())
 
 
 def load_translation_model() -> None:
@@ -233,7 +291,11 @@ def prepare_audio(input_path: Path) -> Path:
         "pcm_s16le",
         str(output_path),
     ]
-    subprocess.run(command, check=True, timeout=timeout)
+    try:
+        subprocess.run(command, check=True, timeout=timeout)
+    except BaseException:
+        output_path.unlink(missing_ok=True)
+        raise
     return output_path
 
 
@@ -245,12 +307,16 @@ def read_duration(audio_path: Path) -> float:
 
 
 def load_replacements() -> list[tuple[str, str]]:
-    replacement_path = Path(CONFIG["TYPHOON_REPLACEMENTS_FILE"])
-    if not replacement_path.exists():
-        return []
+    if "TYPHOON_REPLACEMENTS_TEXT" in CONFIG:
+        contents = CONFIG["TYPHOON_REPLACEMENTS_TEXT"]
+    else:
+        replacement_path = Path(CONFIG["TYPHOON_REPLACEMENTS_FILE"])
+        if not replacement_path.exists():
+            return []
+        contents = replacement_path.read_text(encoding="utf-8", errors="ignore")
 
     replacements: list[tuple[str, str]] = []
-    for line in replacement_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+    for line in contents.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
@@ -260,7 +326,8 @@ def load_replacements() -> list[tuple[str, str]]:
             source, target = stripped.split("=>", 1)
         else:
             continue
-        replacements.append((source.strip(), target.strip()))
+        if source.strip():
+            replacements.append((source.strip(), target.strip()))
     return replacements
 
 
@@ -289,13 +356,32 @@ def translate_text(text: str) -> str:
 def extract_text(result) -> str:
     if not result:
         return ""
+    return " ".join(
+        item if isinstance(item, str) else str(getattr(item, "text", item))
+        for item in result
+    ).strip()
 
-    first = result[0]
-    if isinstance(first, str):
-        return first
-    if hasattr(first, "text"):
-        return str(first.text)
-    return str(first)
+
+def transcribe_loaded(audio_path: Path):
+    if get_asr_backend(CONFIG) == "qwen":
+        import soundfile as sf
+        from qwen_asr.inference.utils import split_audio_into_chunks
+
+        # Re-detect language around quiet boundaries every ~10s. Long mixed
+        # passages can otherwise be transliterated into the dominant language.
+        # prepare_audio (and warm-up) supplies mono 16 kHz audio.
+        samples, sample_rate = sf.read(str(audio_path), dtype="float32")
+        if not len(samples):
+            return []
+        chunks = [(chunk, sample_rate) for chunk, _ in split_audio_into_chunks(
+            samples, sample_rate, max_chunk_sec=10.0,
+        )]
+        language = CONFIG.get("TYPHOON_ASR_LANGUAGE", "auto").strip()
+        return MODEL.transcribe(
+            audio=chunks,
+            language=None if language.lower() in {"", "auto"} else language,
+        )
+    return MODEL.transcribe(audio=[str(audio_path)])
 
 
 def transcribe_audio(audio_path: Path, profile: str | None = None) -> dict:
@@ -309,7 +395,7 @@ def transcribe_audio(audio_path: Path, profile: str | None = None) -> dict:
         start = time.perf_counter()
         with MODEL_LOCK:
             with TORCH.inference_mode():
-                raw_result = MODEL.transcribe(audio=[str(processed_path)])
+                raw_result = transcribe_loaded(processed_path)
 
         source_text = postprocess_text(extract_text(raw_result), active_profile)
         text = translate_text(source_text) if active_profile == "th_to_eng" else source_text
@@ -321,7 +407,9 @@ def transcribe_audio(audio_path: Path, profile: str | None = None) -> dict:
             "source_text": source_text,
             "profile": active_profile,
             "device": DEVICE,
-            "model": CONFIG.get("TYPHOON_MODEL", "scb10x/typhoon-asr-realtime"),
+            "model": CONFIG["TYPHOON_MODEL"],
+            "backend": get_asr_backend(CONFIG),
+            "language": getattr(raw_result[0], "language", "") if raw_result else "",
             "translate_model": CONFIG.get("TYPHOON_TRANSLATE_MODEL", "Helsinki-NLP/opus-mt-th-en"),
             "translation_applied": active_profile == "th_to_eng",
             "audio_duration": audio_duration,
@@ -347,7 +435,8 @@ class TyphoonHandler(socketserver.StreamRequestHandler):
                     "ok": True,
                     "profile": get_active_profile(CONFIG),
                     "device": DEVICE,
-                    "model": CONFIG.get("TYPHOON_MODEL", "scb10x/typhoon-asr-realtime"),
+                    "model": CONFIG["TYPHOON_MODEL"],
+                    "backend": get_asr_backend(CONFIG),
                     "translate_model": CONFIG.get("TYPHOON_TRANSLATE_MODEL", "Helsinki-NLP/opus-mt-th-en"),
                 }
             elif action == "translate":

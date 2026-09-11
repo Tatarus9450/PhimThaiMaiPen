@@ -15,6 +15,7 @@ from typhoon_backend import (
     BASE,
     config_bool,
     ensure_service,
+    get_asr_backend,
     get_service_python,
     load_config,
     ping_service,
@@ -146,11 +147,13 @@ def check_venv_runtime() -> CheckResult:
     modules = [
         "torch",
         "torchaudio",
-        "nemo.collections.asr",
-        "typhoon_asr",
         "transformers",
         "sentencepiece",
     ]
+    modules.extend(
+        ["qwen_asr"] if get_asr_backend(CONFIG) == "qwen"
+        else ["nemo.collections.asr", "typhoon_asr"]
+    )
     code = (
         "import importlib\n"
         f"modules = {modules!r}\n"
@@ -216,15 +219,15 @@ def check_service_health() -> CheckResult:
         return result(
             "fail",
             "service",
-            "worker ของ Typhoon ไม่ตอบสนอง",
-            "The Typhoon worker is not responding",
+            "worker ถอดเสียง ไม่ตอบสนอง",
+            "The ASR worker is not responding",
         )
 
     return result(
         "pass",
         "service",
-        "worker ของ Typhoon พร้อมใช้งาน",
-        "The Typhoon worker is ready",
+        "worker ถอดเสียง พร้อมใช้งาน",
+        "The ASR worker is ready",
         f"startup_check={elapsed:.2f}s",
     )
 

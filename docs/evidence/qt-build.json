@@ -1,0 +1,22 @@
+{
+  "qt": "6.11.1",
+  "backend": "pulseaudio",
+  "capture_flags": "0x2208",
+  "dont_move_flag": "0x0200",
+  "dont_move_compiled": true,
+  "capture_started": false,
+  "artifacts": {
+    "build/lib/x86_64-linux-gnu/libQt6Multimedia.so.6.11.1": {
+      "bytes": 2589008,
+      "sha256": "f53f2fcc8d0d332ab4986d5eadb9a88822e486fabe607704af874c66f5717b96"
+    },
+    "build/lib/plugins/multimedia/libffmpegmediaplugin.so": {
+      "bytes": 1062120,
+      "sha256": "efd9f07db8419f8a3e5985e029e72f292e8a2b132a8f0228714d5efc9bb807fe"
+    },
+    "qt-pulse-device-safety.patch": {
+      "bytes": 1166,
+      "sha256": "25fc810ff9cd616d7c9b84a18992166ac5699f023655e0298cacfe9647e161de"
+    }
+  }
+}

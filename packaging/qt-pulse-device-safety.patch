@@ -1,0 +1,29 @@
+--- a/src/multimedia/pulseaudio/qpulseaudio_contextmanager.cpp
++++ b/src/multimedia/pulseaudio/qpulseaudio_contextmanager.cpp
+@@ -314,11 +314,15 @@
+         case PA_SUBSCRIPTION_EVENT_SINK: {
+             QWriteLocker locker(&pulseEngine->m_sinkLock);
+             pulseEngine->m_sinks.remove(index);
++            locker.unlock();
++            emit pulseEngine->audioOutputsChanged();
+             break;
+         }
+         case PA_SUBSCRIPTION_EVENT_SOURCE: {
+             QWriteLocker locker(&pulseEngine->m_sourceLock);
+             pulseEngine->m_sources.remove(index);
++            locker.unlock();
++            emit pulseEngine->audioInputsChanged();
+             break;
+         }
+         default:
+--- a/src/multimedia/pulseaudio/qpulseaudiosource.cpp
++++ b/src/multimedia/pulseaudio/qpulseaudiosource.cpp
+@@ -152,7 +152,7 @@
+     };
+ 
+     constexpr pa_stream_flags flags =
+-            pa_stream_flags(PA_STREAM_AUTO_TIMING_UPDATE | PA_STREAM_ADJUST_LATENCY);
++            pa_stream_flags(PA_STREAM_AUTO_TIMING_UPDATE | PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE);
+ 
+     std::lock_guard engineLock{ *pulseEngine };
+     installCallbacks(streamType);

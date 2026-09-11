@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=PhimThaiMaiPen
+Name[th]=พิมพ์ไทยไม่เป็น
+Comment=Type Thai and English with your voice
+Comment[th]=พิมพ์ไทยและอังกฤษด้วยเสียง
+Exec=phimthai
+Icon=io.github.tatarus9450.PhimThaiMaiPen
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=speech;dictation;Thai;voice;transcription;
+StartupNotify=true
+StartupWMClass=PhimThaiMaiPen
+Actions=Record;
+
+[Desktop Action Record]
+Name=Start or stop recording
+Name[th]=เริ่มหรือหยุดบันทึกเสียง
+Exec=phimthai --toggle

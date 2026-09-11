@@ -1,0 +1,8 @@
+{
+  "parent_sigkill": true,
+  "watcher_stopped": true,
+  "observed_state": "absent",
+  "exit_delay_seconds": 3.860300057567656e-05,
+  "guard_sha256": "656d5aba0d1e90350aa926141613e03ffde5178e7c27a1c16e1641f77046e57d",
+  "scope": "Owned test parent and pactl subscription only; no capture, no microphone opened; verifies PDEATHSIG after exec"
+}

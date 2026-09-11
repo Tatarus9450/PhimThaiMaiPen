@@ -1,0 +1,56 @@
+{
+  "date_utc": "2026-09-11T19:15:32Z",
+  "command": [
+    "/home/task/Documents/PhimThaiMaiPen/.cache/vulkan-proof/runtime/whisper-cli",
+    "-m",
+    "/home/task/Documents/PhimThaiMaiPen/.cache/vulkan-proof/models/ggml-large-v3-turbo-q5_0.bin",
+    "-f",
+    "/home/task/Documents/PhimThaiMaiPen/.cache/vulkan-proof/asr-inputs/10026868752543983818.wav",
+    "-ng",
+    "-t",
+    "6",
+    "-l",
+    "auto",
+    "-oj",
+    "-of",
+    "/home/task/Documents/PhimThaiMaiPen/.cache/vulkan-cpu-proof/scalar-output"
+  ],
+  "limit_seconds": 180,
+  "runtime": "KDE Platform6.11",
+  "sandbox": [
+    "--nodevice=dri",
+    "--unshare=network"
+  ],
+  "concurrent_builds": "PySide/Torch source builds active or paused; not idle comparison",
+  "owned_pid_namespace": 3,
+  "failure": "outer 180-second timeout",
+  "exit_code": -15,
+  "stopped": true,
+  "elapsed_seconds": 180.1586333699961,
+  "log_sha256": "6c127ce1b5c6e1eca1d16283c384582c172b5e643b9b97f85d3835ef393011d0",
+  "resource_summary": {
+    "sample_count": 360,
+    "last_cpu_seconds": 1064.1,
+    "last_cpu_seconds_per_wall_second": 5.908610375449944,
+    "peak_rss_kib": 778256,
+    "minimum_mem_available_kib": 4793604
+  },
+  "model": {
+    "repo": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "file": "ggml-large-v3-turbo-q5_0.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo-q5_0.bin",
+    "bytes": 574041195,
+    "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+    "license": "MIT",
+    "status": "downloaded and SHA256 verified; no model inference"
+  },
+  "runtime_binary_sha256": "d3d94ba26377a0cd0b4d1b00ffb397192552cb0f84970e4f32cc8de92579c03e",
+  "input_sha256": "9f76647f34cd1b5c46386b220762264ba413ac97c2748d9ab621db4d70d9a7d6",
+  "decoding": "CLI defaults: 5 beams + best-of5, language auto, no GPU,6threads. This is not identical to server decoding defaults and is not a paired thread-count comparison.",
+  "conclusion": "Failure at180s without output;1064.1CPU-seconds accumulated across6threads indicates active computation. Does not independently prove the precise bottleneck or a deadlock absence in every path. Retain failure; optimized dispatch must pass a separate test.",
+  "raw_file": {
+    "path": ".cache/vulkan-cpu-proof/scalar-smoke.json",
+    "sha256": "70a4508a7e8a34aee38f09af6bee65a050413edf92881c60b61fb63b210448b0"
+  }
+}

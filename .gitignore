@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.venv-*/
+venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -10,14 +12,44 @@ __pycache__/
 
 # ── Local config / state ──
 config.env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 .cache/
 .state/
+/models/
+/checkpoints/
+/runtimes/
+*.safetensors
+*.onnx
+*.gguf
+*.ggml
+*.pt
+*.pth
 
 # ── Runtime temp files ──
 *.wav
 !notification.wav
+*.flac
+*.mp3
+*.m4a
+*.ogg
+*.opus
 *.log
 *.pid
 .coverage
 coverage/
 htmlcov/
+
+# Graft local context graph (regenerable cache)
+/graft/
+/build/
+/dist/
+/.flatpak-builder/
+*.flatpak
+*.flatpakref
+*.whl
+*.so
+*.so.*

@@ -1,0 +1,44 @@
+{
+  "date": "2026-09-12",
+  "version": "2.0.0.dev1",
+  "native_python": "3.11.15",
+  "application_tests": 82,
+  "legacy_tests": 6,
+  "all_passed": true,
+  "commands": [
+    ".venv-app/bin/python -m unittest discover -s tests -v",
+    ".venv-app/bin/python -m unittest test_asr_backend -v",
+    ".venv-app/bin/python -m pip check",
+    "desktop-file-validate ~/.local/share/applications/io.github.tatarus9450.PhimThaiMaiPen.desktop",
+    "python3 -m compileall -q phimthai scripts tests",
+    "git diff --check"
+  ],
+  "evidence": {
+    "native_install_asr": "native-clean-install-asr.json",
+    "native_ui": "native-installed-ui.json",
+    "native_audio": "native-audio.json",
+    "guard_parent_exit": "native-guard-parent-exit.json",
+    "gpu_and_cpu_fallback": "flatpak-vulkan-worker.json",
+    "desktop_permissions": "desktop-interactive-analysis.json"
+  },
+  "scope": "Application delivery and source publication; hardware limitations documented. No Flathub publication. GitHub Actions has not run yet.",
+  "source_sha256": {
+    "phimthai/__init__.py": "25c0dd96b9ea810f73a15849d2994f16037bac8ba30e543cf8c041bccb5b0023",
+    "phimthai/__main__.py": "a67c172046323b0efcafe92cb83abc266d5dd4bc931d9312cde1b7bed50643db",
+    "phimthai/app.py": "de54da51c109820709f4ab354bb443998765e2973e4a649265c017c88bcb28bb",
+    "phimthai/audio.py": "edca868de46366543dcfc29326e05e8ceacff8fcf642110f543049c22c5ec307",
+    "phimthai/clipboard.py": "19a5721484087ce04c14a49ad7c5b45a0bbe42fdbd2a459ef5bdc129f63a7428",
+    "phimthai/devices.py": "dbbeca938246ceb3ed5f44469cd5711628e4aba6219e6d9e87ad6dfe444f7466",
+    "phimthai/fastflowlm_backend.py": "fbecce7424e2357fa26aed1ff6754846fa96d688a75c34b0663bdee80fd96088",
+    "phimthai/jobs.py": "9ef88a3375a68f2dd1244c7675c322ecd5d2f8eacd2c771fa51da2f77c17d754",
+    "phimthai/models.py": "906d28503e1aa0181e89bac48a18a99fe1fd080a2a67f31cefb1fc9cc83a28aa",
+    "phimthai/openvino_backend.py": "8bcee395a983ddf1cc4b7ef0ead435ab2b7dce28a98032f21655eb47b174423d",
+    "phimthai/performance.py": "c8b0c91e2041ddae0da448ec343549dab9c99cba929449656e0cfe8e82c8e731",
+    "phimthai/portals.py": "9c5b9f5212ad6d44975cad2a044eedd61f14316ec1e8ba5c8517372c07be52fb",
+    "phimthai/pulse_guard.py": "656d5aba0d1e90350aa926141613e03ffde5178e7c27a1c16e1641f77046e57d",
+    "phimthai/settings.py": "d846b3e1d23bbcd4c3e7016c2f3e89191ed0df0d205ea1526988abe81d3dec59",
+    "phimthai/speech.py": "25b5075a0c1e983766d3fa7a4c422de0a7957c3c1aa31291921ffe6820bcdfa6",
+    "phimthai/vulkan_backend.py": "b25812afd21d1d98aae787e64a0da591ccf835980cfa4f77255226ea04f1a624",
+    "phimthai/worker.py": "1eabdc8afba792f64db8b4bca7479494b8c7f4f9b3fed5737ad81f8dae36f567"
+  }
+}

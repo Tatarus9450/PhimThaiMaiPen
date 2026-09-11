@@ -1,0 +1,240 @@
+{
+  "recorded_utc": "2026-09-11T18:28:33.183434+00:00",
+  "audit_scope": "Read existing completed report and current source; no models, servers, microphones or paste actions were run by this audit.",
+  "input_report": "docs/stress-npu-100.json",
+  "input_report_sha256": "1b0f415ddff954765001c05a6ad3107d710e535dbabd667adaaf541de74047cb",
+  "source_sha256": {
+    "scripts/session-stress.py": "282e8f238634b0217088f23e9c98c78b3fa4502a5ded1d490e3be1c6dfc575a4",
+    "phimthai/jobs.py": "3107d972f19e4c3500b39ac15a4e648f70c2582d9c9c5668870d843464b1ba59",
+    "phimthai/worker.py": "f15df0c707a70b6b10bb514698d5eed0656777a6afa6ab7888b823047053c14e",
+    "phimthai/fastflowlm_backend.py": "fbecce7424e2357fa26aed1ff6754846fa96d688a75c34b0663bdee80fd96088",
+    "scripts/benchmark.py": "0a3554563aec2788e02d6e20c5175d451fa797c7235e68600b7d989dc37b9647"
+  },
+  "counts": {
+    "requested_reported": 100,
+    "completed_reported": 100,
+    "results_observed": 100,
+    "unique_delivered_ids_observed": 100,
+    "duplicate_delivered_ids": 0,
+    "ok_true": 100,
+    "failures_reported": [],
+    "source_file_counts": {
+      "10021525843523202225.wav": 25,
+      "10026868752543983818.wav": 25,
+      "1003119935936341070.wav": 25,
+      "10052240106321793346.wav": 25
+    },
+    "source_sequence_matches_four_file_cycle": true
+  },
+  "backend_and_device": {
+    "backend_counts": {
+      "fastflowlm": 100
+    },
+    "device_counts": {
+      "npu": 100
+    },
+    "model_counts": {
+      "FastFlowLM/Whisper-V3-Turbo-NPU2": 100
+    },
+    "cpu_fallback_reported": false,
+    "scope": "device=npu is assigned by fastflowlm_backend.transcribe after a successful owned-server HTTP result. This report contains no per-job accelerator file-descriptor/kernel trace; earlier separate SDK evidence demonstrates actual device use for that stack."
+  },
+  "worker_and_queue": {
+    "worker_pids_reported": [
+      136154
+    ],
+    "distinct_observed_worker_pids": 1,
+    "recorded_worker_pid_exists_at_audit": {
+      "136154": false
+    },
+    "worker_pid_measurement": "Captured at each successful result, not continuous process census; no FLM child PID reported. The recorded PID is absent at audit time.",
+    "submission_pattern": "Sequential: submit one file, wait for delivered result, schedule next with QTimer.singleShot(0, submit). One outstanding request by construction.",
+    "pending_count_recorded": false,
+    "backlog_pressure_tested": false,
+    "final_pending_assertion": false,
+    "final_worker_exit_assertion_in_script": false
+  },
+  "cleanup": {
+    "temporary_directory_removed_reported": true,
+    "measurement": "finish calls jobs.cancel(), TemporaryDirectory.cleanup(), then records not Path(temporary.name).exists(). Script removes each copied job WAV after successful delivery.",
+    "temporary_paths_in_report": false,
+    "scope": "Positive final cleanup observation from runner; no per-job cleanup timing/history or independent directory path remains in report. Not evidence that recorder-created audio cleanup was tested."
+  },
+  "latency": {
+    "first_job": {
+      "source_file": "10021525843523202225.wav",
+      "elapsed_seconds": 6.169374391996826,
+      "processing_seconds": 5.570725969002524
+    },
+    "warm_jobs_2_through_100_elapsed_seconds": {
+      "count": 99,
+      "min": 2.437554628995713,
+      "median": 3.193532959994627,
+      "max": 6.114976475000731,
+      "mean": 3.219367949555615
+    },
+    "warm_jobs_2_through_100_processing_seconds": {
+      "count": 99,
+      "min": 2.3711879789989325,
+      "median": 3.127656755001226,
+      "max": 5.948086448996037,
+      "mean": 3.138405377141625
+    },
+    "elapsed_semantics": "worker.py lines127-130: time from immediately after JSON request parsing through run(), including VAD, model checks, backend setup/inference, postprocessing and performance recording. Excludes initial Python process startup/imports, Qt dispatch/response handling, WAV copying, microphone capture and paste.",
+    "processing_semantics": "fastflowlm_backend.py lines86-104: includes start(settings), possible server startup, input read, multipart creation and HTTP inference/JSON response. Excludes outer VAD, model verification and postprocessing; not pure NPU kernel time.",
+    "cold_start_caveat": "First job includes lazy work inside those timers, but is not a full app cold-start or stop-speaking-to-paste measurement. Warm pooled medians combine four different input durations; compare per-source statistics for repeat stability."
+  },
+  "per_source": [
+    {
+      "source_file": "10021525843523202225.wav",
+      "count": 25,
+      "distinct_text_count": 1,
+      "distinct_source_text_count": 1,
+      "identical_text_all_repeats": true,
+      "text": "แจเนียล เล่งท่านผู้ชื่อชาญด้านโรคภัยประจำสหรับประชาชาติ ที่แหล่งว่าเป็นไปได้ที่การระบาดของรุ่น ในครั้งนี้เกิดจากจ้าหน้าที่รักษาความสงุก",
+      "text_sha256_utf8": "a25f166612cc820e7912abd93607e03a206747e8445dfd799c85e24757e397bf",
+      "first_elapsed_seconds": 6.169374391996826,
+      "later_24_elapsed_seconds": {
+        "count": 24,
+        "min": 4.311399156002153,
+        "median": 4.361172863998945,
+        "max": 6.114976475000731,
+        "mean": 4.4853579799995105
+      },
+      "all_elapsed_seconds": {
+        "count": 25,
+        "min": 4.311399156002153,
+        "median": 4.361561322002672,
+        "max": 6.169374391996826,
+        "mean": 4.552718636479403
+      },
+      "all_processing_seconds": {
+        "count": 25,
+        "min": 4.237603108995245,
+        "median": 4.284506404001149,
+        "max": 5.948086448996037,
+        "mean": 4.445091158040159
+      },
+      "input_duration_seconds": 8.82,
+      "matches_earlier_sdk_output_after_strip": true,
+      "matches_earlier_sdk_output_casefolded": true
+    },
+    {
+      "source_file": "10026868752543983818.wav",
+      "count": 25,
+      "distinct_text_count": 1,
+      "distinct_source_text_count": 1,
+      "identical_text_all_repeats": true,
+      "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+      "text_sha256_utf8": "7b09fdd9d0e8a80a16925b14a261c8c6cdc7522176a9c010643497668337f7c5",
+      "first_elapsed_seconds": 3.301531099001295,
+      "later_24_elapsed_seconds": {
+        "count": 24,
+        "min": 3.193532959994627,
+        "median": 3.254016089002107,
+        "max": 4.410035341999901,
+        "mean": 3.360025106791909
+      },
+      "all_elapsed_seconds": {
+        "count": 25,
+        "min": 3.193532959994627,
+        "median": 3.2564571350012557,
+        "max": 4.410035341999901,
+        "mean": 3.3576853464802845
+      },
+      "all_processing_seconds": {
+        "count": 25,
+        "min": 3.127656755001226,
+        "median": 3.18513051699847,
+        "max": 4.343732082001225,
+        "mean": 3.277517503479903
+      },
+      "input_duration_seconds": 7.2,
+      "matches_earlier_sdk_output_after_strip": false,
+      "matches_earlier_sdk_output_casefolded": true,
+      "earlier_sdk_difference": "Only Latin capitalization differs: current pH vs earlier PH. No cause assigned by this audit."
+    },
+    {
+      "source_file": "1003119935936341070.wav",
+      "count": 25,
+      "distinct_text_count": 1,
+      "distinct_source_text_count": 1,
+      "identical_text_all_repeats": true,
+      "text": "However, due to the slow communication channels, styles in the West could lag behind by 25 to 30 years.",
+      "text_sha256_utf8": "2226dab26de694e2bb52e0abacc19fa60d3023c75b6b6002aff32b2020615a64",
+      "first_elapsed_seconds": 2.506451292996644,
+      "later_24_elapsed_seconds": {
+        "count": 24,
+        "min": 2.437554628995713,
+        "median": 2.4905775815022935,
+        "max": 3.287484887005121,
+        "mean": 2.5299588645423987
+      },
+      "all_elapsed_seconds": {
+        "count": 25,
+        "min": 2.437554628995713,
+        "median": 2.491004759001953,
+        "max": 3.287484887005121,
+        "mean": 2.5290185616805685
+      },
+      "all_processing_seconds": {
+        "count": 25,
+        "min": 2.3711879789989325,
+        "median": 2.401537431993347,
+        "max": 3.1699538210013998,
+        "mean": 2.4445360488802543
+      },
+      "input_duration_seconds": 10.56,
+      "matches_earlier_sdk_output_after_strip": true,
+      "matches_earlier_sdk_output_casefolded": true
+    },
+    {
+      "source_file": "10052240106321793346.wav",
+      "count": 25,
+      "distinct_text_count": 1,
+      "distinct_source_text_count": 1,
+      "identical_text_all_repeats": true,
+      "text": "All nouns alongside the words say for you always begin with a capital letter, even in the middle of a sentence.",
+      "text_sha256_utf8": "1382ae27962625bdc5dbabe5941159d01646b6781ad9d9d24e67aa85cf42849f",
+      "first_elapsed_seconds": 2.4881508839971502,
+      "later_24_elapsed_seconds": {
+        "count": 24,
+        "min": 2.463831735003623,
+        "median": 2.5033901765018527,
+        "max": 3.164655444001255,
+        "mean": 2.558878620749965
+      },
+      "all_elapsed_seconds": {
+        "count": 25,
+        "min": 2.463831735003623,
+        "median": 2.5014680000022054,
+        "max": 3.164655444001255,
+        "mean": 2.5560495112798525
+      },
+      "all_processing_seconds": {
+        "count": 25,
+        "min": 2.397315891001199,
+        "median": 2.4341064330001245,
+        "max": 3.098219904000871,
+        "mean": 2.48376962184062
+      },
+      "input_duration_seconds": 8.76,
+      "matches_earlier_sdk_output_after_strip": true,
+      "matches_earlier_sdk_output_casefolded": true
+    }
+  ],
+  "not_proven": [
+    "Microphone capture, disconnection, silence or loss-free recording",
+    "Global shortcut and target-window focus behavior",
+    "Clipboard preservation or exactly-once target-app paste",
+    "Multiple queued jobs, queue overflow or concurrent submission",
+    "Cancellation during active inference, forced worker crash or recovery",
+    "NPU-to-CPU fallback under injected failure",
+    "Per-job physical accelerator utilization, power or memory-leak trend",
+    "Representative Thai-English conversational code-switch accuracy",
+    "100 distinct audio inputs: this run uses four fixtures repeated25times",
+    "30 percent end-to-end improvement against a paired baseline",
+    "Cross-distribution or cross-hardware behavior; stress report does not capture OS/Flatpak identity, settings snapshot or runtime binary/model revision hash"
+  ],
+  "verdict": "PASS for 100 sequential successful delivered ASR jobs with unique IDs, one observed worker PID, stable repeated outputs and runner-reported final temporary-directory cleanup. Broader application and release gates remain unproven."
+}

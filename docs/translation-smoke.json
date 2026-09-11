@@ -1,0 +1,8 @@
+{
+  "source": "สวัสดีครับ วันนี้เราจะทดสอบระบบพิมพ์ด้วยเสียงภาษาไทยและภาษาอังกฤษ ข้อความนี้เป็นตัวอย่างสำหรับทดสอบการแปลเท่านั้น",
+  "ok": true,
+  "text": "Hello, today we will test the printing system with English and English. This message is only an example of a translation test.",
+  "device": "cpu",
+  "model": "Helsinki-NLP/opus-mt-th-en",
+  "warning": ""
+}

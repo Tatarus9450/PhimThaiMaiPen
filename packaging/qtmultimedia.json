@@ -1,0 +1,25 @@
+{
+  "name": "qtmultimedia-pulse-safety",
+  "buildsystem": "simple",
+  "build-commands": [
+    "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=OFF -DFEATURE_spatialaudio=OFF -DFEATURE_gstreamer=OFF -DFEATURE_pulseaudio=ON -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+    "cmake --build build --target Multimedia QFFmpegMediaPlugin --parallel 2",
+    "install -Dm755 build/lib/*/libQt6Multimedia.so.6.11.1 /app/lib/libQt6Multimedia.so.6.11.1",
+    "ln -sf libQt6Multimedia.so.6.11.1 /app/lib/libQt6Multimedia.so.6",
+    "ln -sf libQt6Multimedia.so.6 /app/lib/libQt6Multimedia.so",
+    "install -Dm755 build/lib/plugins/multimedia/libffmpegmediaplugin.so /app/lib/plugins/multimedia/libffmpegmediaplugin.so",
+    "install -Dm644 LICENSES/LGPL-3.0-only.txt /app/share/licenses/qtmultimedia/LGPL-3.0-only.txt",
+    "install -Dm644 LICENSES/GPL-3.0-only.txt /app/share/licenses/qtmultimedia/GPL-3.0-only.txt"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtmultimedia-everywhere-src-6.11.1.tar.xz",
+      "sha256": "390f8e52ddee3aca5c4de7eead900c84c4fa61ff6d1f0ebea9c7543365c09b0a"
+    },
+    {
+      "type": "patch",
+      "path": "qt-pulse-device-safety.patch"
+    }
+  ]
+}

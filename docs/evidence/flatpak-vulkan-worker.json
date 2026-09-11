@@ -1,0 +1,381 @@
+{
+  "date": "2026-09-12",
+  "app_id": "io.github.tatarus9450.PhimThaiMaiPen",
+  "installed_commit": "efb38fd8d00b460e55028473efbec18ed8839f738f9585d0ca530c7c2afecc40",
+  "scope": "Installed Flatpak phimthai.worker via JSON protocol, one full7.2s public Thai clip per case; CPU case requests GPU with DRI removed to exercise fallback. No microphone or paste.",
+  "concurrent_source_builds": true,
+  "instrumentation_note": "One initial GPU job completed successfully but the harness incorrectly used host-mounted /sys/class/net to check namespace isolation. Initial raw evidence retained in .cache/flatpak-vulkan-worker-proof/initial-sysfs-check; final cases use socket.if_nameindex and /proc/net/route. No application/backend change was needed.",
+  "case_order": [
+    "gpu",
+    "cpu-fallback"
+  ],
+  "complete": true,
+  "error": null,
+  "schema": 1,
+  "reference": {
+    "language": "th_th",
+    "file": "10026868752543983818.wav",
+    "reference": "สิ่งนี้เรียกว่าค่า pH ของสารเคมี คุณสามารถสร้างตัวระบุได้โดยใช้น้ำกะหล่ำปลีแดง",
+    "sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+    "path": "/home/task/Documents/PhimThaiMaiPen/.cache/benchmark/10026868752543983818.wav",
+    "dataset": "Google FLEURS",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "license": "CC-BY-4.0"
+  },
+  "cases": {
+    "gpu": {
+      "command": [
+        "flatpak",
+        "run",
+        "--command=python3",
+        "--unshare=network",
+        "--nodevice=all",
+        "--device=dri",
+        "--filesystem=/home/task/Documents/PhimThaiMaiPen:ro",
+        "--filesystem=/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof",
+        "io.github.tatarus9450.PhimThaiMaiPen",
+        "/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof/inside.py",
+        "gpu"
+      ],
+      "exit": 0,
+      "outer_seconds": 5.012562261996209,
+      "module": "/app/lib/python3.13/site-packages/phimthai/worker.py",
+      "module_sha256": "1eabdc8afba792f64db8b4bca7479494b8c7f4f9b3fed5737ad81f8dae36f567",
+      "runtime": "/app/libexec/whisper-vulkan/whisper-server",
+      "runtime_server_sha256": "0d31176db78a19d896277766618e5bb039f1bfc3493d8663299e952ecd3d0401",
+      "runtime_cpu_module_sha256": "e5b45c9c781e71f3f9e3cae3433cbfb041fd4d43f6a9a63e1cf153d20a3f9f3e",
+      "dispatch_runtime_matches": true,
+      "model_path": "/home/task/.var/app/io.github.tatarus9450.PhimThaiMaiPen/data/phimthai/models/whisper-turbo-vulkan",
+      "model_manifest": {
+        "version": 2,
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "files": {
+          "ggml-large-v3-turbo-q5_0.bin": {
+            "size": 574041195,
+            "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"
+          }
+        }
+      },
+      "input_sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+      "request": {
+        "id": "flatpak-vulkan-gpu-9b9f277394414660a12db1ed9a30c2e3",
+        "action": "transcribe",
+        "audio": "/home/task/Documents/PhimThaiMaiPen/.cache/benchmark/10026868752543983818.wav",
+        "settings": {
+          "version": 2,
+          "model": "whisper-turbo-vulkan",
+          "device": "gpu",
+          "language": "auto",
+          "profile": "raw",
+          "microphone": "",
+          "paste_mode": "review",
+          "preference": "speed",
+          "keep_history": false,
+          "keep_audio_history": false,
+          "remember_desktop": false,
+          "onboarding_done": false,
+          "hotkey": "CTRL+ALT+SPACE",
+          "cpu_threads": 6,
+          "dictionary": "",
+          "vad": false
+        }
+      },
+      "messages": [
+        {
+          "received_seconds": 0.10145458199986024,
+          "payload": {
+            "event": "ready"
+          }
+        },
+        {
+          "received_seconds": 4.495181710997713,
+          "payload": {
+            "ok": true,
+            "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+            "device": "vulkan",
+            "device_description": "AMD Radeon 840M Graphics (RADV KRACKAN1)",
+            "backend": "whisper.cpp",
+            "warning": "",
+            "load_time": 0.20344234000367578,
+            "processing_time": 3.831475147002493,
+            "audio_duration": 7.2,
+            "source_text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+            "model": "ggerganov/whisper.cpp",
+            "input_duration": 7.2,
+            "vad_applied": false,
+            "no_speech": false,
+            "id": "flatpak-vulkan-gpu-9b9f277394414660a12db1ed9a30c2e3",
+            "elapsed": 4.38661214599415
+          }
+        }
+      ],
+      "accuracy": {
+        "metric": "Thai CER",
+        "errors": 4,
+        "units": 75,
+        "normalization": "scripts/benchmark.py normalize(language=th) and distance",
+        "benchmark_script_sha256": "0a3554563aec2788e02d6e20c5175d451fa797c7235e68600b7d989dc37b9647"
+      },
+      "network": {
+        "interfaces": [
+          "lo"
+        ],
+        "namespace": "net:[4026533475]",
+        "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \n"
+      },
+      "dri_nodes": [
+        "/dev/dri/by-path",
+        "/dev/dri/card1",
+        "/dev/dri/renderD128"
+      ],
+      "resources": {
+        "sample_interval_seconds": 0.1,
+        "samples": 44,
+        "peak_combined_process_rss_kib": 143472,
+        "peak_server_rss_kib": 113932,
+        "min_mem_available_kib": 6313960,
+        "peak_resident_vram_kib": 828432,
+        "peak_resident_gtt_kib": 42360,
+        "drm_clients": {
+          "30:314": {
+            "pid": 30,
+            "client": "314",
+            "path": "/dev/dri/renderD128",
+            "driver": "amdgpu",
+            "pci": "0000:03:00.0",
+            "first_compute_ns": 17708795,
+            "last_compute_ns": 3708856455,
+            "compute_ns_delta": 3691147660
+          },
+          "30:316": {
+            "pid": 30,
+            "client": "316",
+            "path": "/dev/dri/renderD128",
+            "driver": "amdgpu",
+            "pci": "0000:03:00.0",
+            "first_compute_ns": null,
+            "last_compute_ns": null,
+            "compute_ns_delta": 0
+          }
+        },
+        "backend_maps": [
+          "/app/libexec/whisper-vulkan/bin/libggml-cpu-haswell.so",
+          "/app/libexec/whisper-vulkan/bin/libggml-vulkan.so",
+          "/app/libexec/whisper-vulkan/lib/libggml-base.so.0.23.0"
+        ]
+      },
+      "backend_log": [
+        "load_backend: loaded Vulkan backend from /app/libexec/whisper-vulkan/bin/libggml-vulkan.so",
+        "load_backend: loaded CPU backend from /app/libexec/whisper-vulkan/bin/libggml-cpu-haswell.so",
+        "whisper_init_with_params_no_state: use gpu    = 1",
+        "whisper_init_with_params_no_state: backends   = 2",
+        "whisper_model_load:      Vulkan0 total size =   573.40 MB",
+        "whisper_backend_init_gpu: device 0: Vulkan0 (type: 2)",
+        "whisper_backend_init_gpu: found GPU device 0: Vulkan0 (type: 2, cnt: 0)",
+        "whisper_backend_init_gpu: using Vulkan0 backend",
+        "system_info: n_threads = 6 / 12 | WHISPER : VITISAI = 0 | COREML = 0 | OPENVINO = 0 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | OPENMP = 1 | REPACK = 1 | "
+      ],
+      "worker_exit": 0,
+      "cleanup": {
+        "3": {
+          "comm": "python3",
+          "start_ticks": "4163886",
+          "state_after_worker_exit": "absent"
+        },
+        "30": {
+          "comm": "whisper-server",
+          "start_ticks": "4163924",
+          "state_after_worker_exit": "absent"
+        }
+      },
+      "checks": {
+        "installed_worker": true,
+        "one_ready": true,
+        "one_result": true,
+        "result_ok": true,
+        "expected_actual_device": true,
+        "worker_exited_cleanly": true,
+        "owned_servers_reaped": true,
+        "network_off": true,
+        "one_owned_server": true,
+        "haswell_selected": true,
+        "expected_drm_access": true,
+        "actual_vulkan_allocation": true,
+        "drm_compute_increased": true
+      },
+      "raw_case_sha256": "1cdd228db438b238eb3125b5d5213bd8edd56263407c51db5db1593ad0652be2",
+      "raw_case_path": "/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof/gpu.json"
+    },
+    "cpu-fallback": {
+      "command": [
+        "flatpak",
+        "run",
+        "--command=python3",
+        "--unshare=network",
+        "--nodevice=all",
+        "--nodevice=dri",
+        "--filesystem=/home/task/Documents/PhimThaiMaiPen:ro",
+        "--filesystem=/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof",
+        "io.github.tatarus9450.PhimThaiMaiPen",
+        "/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof/inside.py",
+        "cpu-fallback"
+      ],
+      "exit": 0,
+      "outer_seconds": 23.741727575004916,
+      "module": "/app/lib/python3.13/site-packages/phimthai/worker.py",
+      "module_sha256": "1eabdc8afba792f64db8b4bca7479494b8c7f4f9b3fed5737ad81f8dae36f567",
+      "runtime": "/app/libexec/whisper-vulkan/whisper-server",
+      "runtime_server_sha256": "0d31176db78a19d896277766618e5bb039f1bfc3493d8663299e952ecd3d0401",
+      "runtime_cpu_module_sha256": "e5b45c9c781e71f3f9e3cae3433cbfb041fd4d43f6a9a63e1cf153d20a3f9f3e",
+      "dispatch_runtime_matches": true,
+      "model_path": "/home/task/.var/app/io.github.tatarus9450.PhimThaiMaiPen/data/phimthai/models/whisper-turbo-vulkan",
+      "model_manifest": {
+        "version": 2,
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "files": {
+          "ggml-large-v3-turbo-q5_0.bin": {
+            "size": 574041195,
+            "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"
+          }
+        }
+      },
+      "input_sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+      "request": {
+        "id": "flatpak-vulkan-cpu-fallback-b4b7be3884ae43ccb111e46b90d34efc",
+        "action": "transcribe",
+        "audio": "/home/task/Documents/PhimThaiMaiPen/.cache/benchmark/10026868752543983818.wav",
+        "settings": {
+          "version": 2,
+          "model": "whisper-turbo-vulkan",
+          "device": "gpu",
+          "language": "auto",
+          "profile": "raw",
+          "microphone": "",
+          "paste_mode": "review",
+          "preference": "speed",
+          "keep_history": false,
+          "keep_audio_history": false,
+          "remember_desktop": false,
+          "onboarding_done": false,
+          "hotkey": "CTRL+ALT+SPACE",
+          "cpu_threads": 6,
+          "dictionary": "",
+          "vad": false
+        }
+      },
+      "messages": [
+        {
+          "received_seconds": 0.10122506799962139,
+          "payload": {
+            "event": "ready"
+          }
+        },
+        {
+          "received_seconds": 23.38423107199924,
+          "payload": {
+            "ok": true,
+            "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+            "device": "cpu",
+            "device_description": "CPU",
+            "backend": "whisper.cpp",
+            "warning": "Compatible hardware GPU unavailable; using CPU",
+            "load_time": 0.20394472799671348,
+            "processing_time": 22.750085581996245,
+            "audio_duration": 7.2,
+            "source_text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+            "model": "ggerganov/whisper.cpp",
+            "input_duration": 7.2,
+            "vad_applied": false,
+            "no_speech": false,
+            "id": "flatpak-vulkan-cpu-fallback-b4b7be3884ae43ccb111e46b90d34efc",
+            "elapsed": 23.29979484299838
+          }
+        }
+      ],
+      "accuracy": {
+        "metric": "Thai CER",
+        "errors": 4,
+        "units": 75,
+        "normalization": "scripts/benchmark.py normalize(language=th) and distance",
+        "benchmark_script_sha256": "0a3554563aec2788e02d6e20c5175d451fa797c7235e68600b7d989dc37b9647"
+      },
+      "network": {
+        "interfaces": [
+          "lo"
+        ],
+        "namespace": "net:[4026533475]",
+        "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \n"
+      },
+      "dri_nodes": [],
+      "resources": {
+        "sample_interval_seconds": 0.1,
+        "samples": 226,
+        "peak_combined_process_rss_kib": 809232,
+        "peak_server_rss_kib": 779184,
+        "min_mem_available_kib": 5625484,
+        "peak_resident_vram_kib": 0,
+        "peak_resident_gtt_kib": 0,
+        "drm_clients": {},
+        "backend_maps": [
+          "/app/libexec/whisper-vulkan/bin/libggml-cpu-haswell.so",
+          "/app/libexec/whisper-vulkan/bin/libggml-vulkan.so",
+          "/app/libexec/whisper-vulkan/lib/libggml-base.so.0.23.0"
+        ]
+      },
+      "backend_log": [
+        "load_backend: loaded Vulkan backend from /app/libexec/whisper-vulkan/bin/libggml-vulkan.so",
+        "load_backend: loaded CPU backend from /app/libexec/whisper-vulkan/bin/libggml-cpu-haswell.so",
+        "whisper_init_with_params_no_state: use gpu    = 0",
+        "whisper_init_with_params_no_state: backends   = 2",
+        "whisper_model_load:          CPU total size =   573.40 MB",
+        "whisper_backend_init_gpu: no GPU found",
+        "system_info: n_threads = 6 / 12 | WHISPER : VITISAI = 0 | COREML = 0 | OPENVINO = 0 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | OPENMP = 1 | REPACK = 1 | "
+      ],
+      "worker_exit": 0,
+      "cleanup": {
+        "3": {
+          "comm": "python3",
+          "start_ticks": "4164387",
+          "state_after_worker_exit": "absent"
+        },
+        "26": {
+          "comm": "whisper-server",
+          "start_ticks": "4164425",
+          "state_after_worker_exit": "absent"
+        }
+      },
+      "checks": {
+        "installed_worker": true,
+        "one_ready": true,
+        "one_result": true,
+        "result_ok": true,
+        "expected_actual_device": true,
+        "worker_exited_cleanly": true,
+        "owned_servers_reaped": true,
+        "network_off": true,
+        "one_owned_server": true,
+        "haswell_selected": true,
+        "expected_drm_access": true,
+        "same_model_cpu_fallback": true
+      },
+      "raw_case_sha256": "3bb1b4e48c732d9d29ff238e15a58d4e5db84067c01bf8665627e022826f26f0",
+      "raw_case_path": "/home/task/Documents/PhimThaiMaiPen/.cache/flatpak-vulkan-worker-proof/cpu-fallback.json"
+    }
+  },
+  "script_sha256": {
+    "inside.py": "15b66b2f2a737e7a5aac783dd012768802472c9706f31a90228783a917214395",
+    "run.py": "9d37c8a7907fafe2a7e8c7500f0950bb8f4e75297100b241b62dc66fe4446d0b"
+  },
+  "raw_complete_sha256": "76d6c29728ed8859e8fd00870a3fb7de65e5b61278ab947752f4395ebd3aec13",
+  "identical_text_across_devices": true,
+  "limits": [
+    "One full public Thai clip per final case; no microphone, GUI, global shortcut, paste or cancellation test",
+    "Fresh worker/model process per case; OS file caches were not flushed; source builds ran concurrently",
+    "GPU-unavailable fallback is observed; deliberate GPU initialization/inference failure and live worker cancellation are separately tested by unit fixtures, not induced here",
+    "Direct worker JSON protocol and graceful EOF shutdown; this does not test Qt JobController idle timeout/group kill",
+    "CPU is current Ryzen AI5 340 with Haswell module; no older CPU or different Linux/desktop verification",
+    "Thai CER4/75 on this clip does not establish broad Thai/English/mixed accuracy or a30percent improvement",
+    "RSS excludes GPU allocations; DRM clients are deduplicated per process/client but memory totals are not unique physical allocation on integrated graphics",
+    "Local installed Flatpak proof only; no Flathub review, listing or public release claim"
+  ]
+}

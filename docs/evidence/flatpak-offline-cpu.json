@@ -1,0 +1,33 @@
+{
+  "network_namespace": "disabled",
+  "packaged_optional_dependencies_absent": [
+    "librosa",
+    "scipy",
+    "numba",
+    "sklearn"
+  ],
+  "results": [
+    {
+      "ok": true,
+      "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกระหล่ำปีแดง",
+      "source_text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกระหล่ำปีแดง",
+      "profile": "raw",
+      "device": "cpu",
+      "model": "Qwen/Qwen3-ASR-0.6B",
+      "backend": "qwen",
+      "language": "Thai",
+      "translate_model": "Helsinki-NLP/opus-mt-th-en",
+      "translation_applied": false,
+      "audio_duration": 6.79,
+      "processing_time": 7.299247720999119,
+      "rtf": 1.0749996643592223,
+      "warning": "",
+      "input_duration": 7.2,
+      "vad_applied": true,
+      "no_speech": false,
+      "retained_duration": 6.79,
+      "id": "flatpak-offline-qwen",
+      "elapsed": 20.833950407002703
+    }
+  ]
+}

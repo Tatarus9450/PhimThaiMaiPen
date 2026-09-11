@@ -1,0 +1,12 @@
+{
+  "model": "Helsinki-NLP/opus-mt-th-en",
+  "input_tokens": 606,
+  "chunks": 7,
+  "max_chunk_tokens": 95,
+  "input_characters_preserved": true,
+  "final_marker_719_present": true,
+  "all_number_markers_present": false,
+  "processing_seconds": 14.085421788004169,
+  "text": "The 1001 program is today testing with Thai and English, the program is running with your computer. Please check the text before you use it. 1002 Today we test the printing program with Thai and English. The program is running with 1003. Today we will test the printing program with English and English. Please check the text before you use it. The item 1005 today tests the printing program with Thai and English. The program will check the text with 1006. Today we test the software with Thai and English. The program that works on your computer. Please check the text before you use it. item 1009. Today we will test the printing program with Thai and English. Please check the text before using it. Today we test the Thai and English printing program. A program that works on your computer. Check your computer's 1015. A program that works on your computer. A program that uses Thai and English. A program that works on your computer. 1016 Today We will test the printing program with Thai and English. A program that works with your computer. Please check your computer's 1019. A program that uses Thai and English. A program that works with your computer. The 1020 we will test the printing program with Thai and English. The program is running in your computer. Please check the text before you use it. The 1021th. Today we will test the type with Thai and English. The program will be checked before you use it. The program will be tested with Thai and English. Please check the text before you use it. The item 1024 today tests the printing program with Thai and English. The program is running with your computer. Please check the text before you use it. The list at 1025. Today we test the printer with Thai and English. The program works with your computer. Please check the message before using it. The last number is 719.",
+  "scope": "Synthetic original Thai text for input coverage/output tail; not a translation quality benchmark"
+}

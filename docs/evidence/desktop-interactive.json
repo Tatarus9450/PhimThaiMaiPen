@@ -1,0 +1,34 @@
+{
+  "scope": "Interactive Wayland clipboard and portal probe; owned Qt test field; no physical recording",
+  "events": [
+    {
+      "event": "ready"
+    },
+    {
+      "event": "paste_enabled"
+    },
+    {
+      "event": "paste_enabled"
+    },
+    {
+      "event": "paste_sent"
+    },
+    {
+      "event": "error",
+      "error": "Desktop permission was cancelled or denied"
+    },
+    {
+      "event": "shortcuts_enabled",
+      "trigger": ""
+    },
+    {
+      "event": "shortcuts_enabled",
+      "trigger": "Meta+H"
+    }
+  ],
+  "platform": "wayland",
+  "paste_exactly_once": true,
+  "clipboard_restored_all_mime": false,
+  "newer_copy_preserved": true,
+  "closed": true
+}

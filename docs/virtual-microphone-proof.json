@@ -1,0 +1,9 @@
+{
+  "source": "isolated virtual source with public test audio",
+  "captured": true,
+  "sample_rate": 16000,
+  "channels": 1,
+  "duration": 10.176,
+  "maximum_level_percent": 8,
+  "errors": []
+}

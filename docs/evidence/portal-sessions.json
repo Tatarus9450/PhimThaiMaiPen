@@ -1,0 +1,11 @@
+{
+  "GlobalShortcuts": {
+    "session_created": true,
+    "session_closed": true
+  },
+  "RemoteDesktop": {
+    "session_created": true,
+    "session_closed": true
+  },
+  "scope": "Create/Close only; no shortcut binding, keyboard grant, or paste exercised"
+}

@@ -1,0 +1,35 @@
+{
+  "active": true,
+  "initial_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty"
+  ],
+  "owned_before_restore": false,
+  "offered_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty"
+  ],
+  "immediate_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty"
+  ],
+  "immediate_same": {
+    "text/plain": true,
+    "text/html": true,
+    "application/x-kde-onlyReplaceEmpty": true
+  },
+  "later_formats": [
+    "text/plain",
+    "text/html",
+    "application/x-kde-onlyReplaceEmpty"
+  ],
+  "later_same": {
+    "text/plain": true,
+    "text/html": true,
+    "application/x-kde-onlyReplaceEmpty": true
+  },
+  "exact": true
+}

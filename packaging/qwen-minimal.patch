@@ -1,0 +1,79 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -20,17 +20,12 @@
+ authors = [{ name = "Alibaba Qwen Team" }]
+ 
+ dependencies = [
++  "torch>=2.6",
+   "transformers==4.57.6",
+-  "nagisa==0.2.11",
+-  "soynlp==0.0.493",
+   "accelerate==1.12.0",
+-  "qwen-omni-utils",
+-  "librosa",
++  "numpy",
+   "soundfile",
+-  "sox",
+-  "gradio",
+-  "flask",
+-  "pytz",
++  "requests",
+ ]
+ 
+ [project.optional-dependencies]
+@@ -42,11 +37,6 @@
+ Homepage = "https://github.com/Qwen/Qwen3-ASR"
+ Repository = "https://github.com/Qwen/Qwen3-ASR"
+ 
+-[project.scripts]
+-qwen-asr-demo = "qwen_asr.cli.demo:main"
+-qwen-asr-demo-streaming = "qwen_asr.cli.demo_streaming:main"
+-qwen-asr-serve = "qwen_asr.cli.serve:main"
+-
+ [tool.setuptools]
+ packages = { find = { where = ["."] , include = ["qwen_asr*"] } }
+ include-package-data = true
+--- a/qwen_asr/inference/qwen3_forced_aligner.py
++++ b/qwen_asr/inference/qwen3_forced_aligner.py
+@@ -18,7 +18,6 @@
+ from dataclasses import dataclass
+ from typing import Any, Dict, List, Optional, Union
+ 
+-import nagisa
+ import torch
+ from qwen_asr.core.transformers_backend import (
+     Qwen3ASRConfig,
+@@ -99,6 +98,7 @@
+         return tokens
+ 
+     def tokenize_japanese(self, text: str) -> List[str]:
++        import nagisa
+         words = nagisa.tagging(text).words
+         tokens: List[str] = []
+         for w in words:
+--- a/qwen_asr/inference/utils.py
++++ b/qwen_asr/inference/utils.py
+@@ -20,7 +20,6 @@
+ from typing import Any, Iterable, List, Optional, Tuple, Union
+ from urllib.parse import urlparse
+ 
+-import librosa
+ import numpy as np
+ import soundfile as sf
+ 
+@@ -143,6 +142,7 @@
+         with io.BytesIO(audio_bytes) as f:
+             audio, sr = sf.read(f, dtype="float32", always_2d=False)
+     else:
++        import librosa
+         audio, sr = librosa.load(x, sr=None, mono=False)
+ 
+     audio = np.asarray(audio, dtype=np.float32)
+@@ -196,6 +196,7 @@
+ 
+     audio = to_mono(np.asarray(audio))
+     if sr != SAMPLE_RATE:
++        import librosa
+         audio = librosa.resample(audio, orig_sr=sr, target_sr=SAMPLE_RATE).astype(np.float32)
+     audio = float_range_normalize(audio)
+     return audio

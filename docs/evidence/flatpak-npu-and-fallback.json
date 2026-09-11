@@ -1,0 +1,55 @@
+{
+  "app_npu": [
+    {
+      "event": "ready"
+    },
+    {
+      "ok": true,
+      "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+      "device": "npu",
+      "backend": "fastflowlm",
+      "processing_time": 5.792712718997791,
+      "audio_duration": 6.79,
+      "warning": "Experimental AMD NPU: review Thai text carefully; Qwen CPU was more accurate in initial samples",
+      "source_text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกลำปีแดง",
+      "model": "FastFlowLM/Whisper-V3-Turbo-NPU2",
+      "input_duration": 7.2,
+      "vad_applied": true,
+      "no_speech": false,
+      "retained_duration": 6.79,
+      "id": "flatpak-npu-app",
+      "elapsed": 6.610080484999344
+    }
+  ],
+  "cpu_fallback": [
+    {
+      "event": "ready"
+    },
+    {
+      "ok": true,
+      "text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกระหล่ำปีแดง",
+      "source_text": "สิ่งนี้เรียกว่าค่า pH ของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ำกระหล่ำปีแดง",
+      "profile": "raw",
+      "device": "cpu",
+      "model": "Qwen/Qwen3-ASR-0.6B",
+      "backend": "qwen",
+      "language": "Thai",
+      "translate_model": "Helsinki-NLP/opus-mt-th-en",
+      "translation_applied": false,
+      "audio_duration": 6.79,
+      "processing_time": 7.037577944000077,
+      "rtf": 1.0364621419735018,
+      "warning": "AMD NPU unavailable (AMD NPU or the tested FastFlowLM runtime is unavailable); completed with Qwen 0.6B on CPU",
+      "input_duration": 7.2,
+      "vad_applied": true,
+      "no_speech": false,
+      "retained_duration": 6.79,
+      "id": "flatpak-npu-app",
+      "elapsed": 22.78348125100456
+    }
+  ],
+  "npu_permission": "Per-run --device=all; default package only --device=dri",
+  "network_namespace": "disabled for both",
+  "fallback_trigger": "Default sandbox cannot access AMD NPU",
+  "fallback_result_count": 1
+}
