@@ -53,9 +53,9 @@ The earlier failed PulseAudio removal test is retained in `microphone-disconnect
 - [x] README includes installation, daily use, updates, data locations, model limitations and legacy migration
 - [x] .gitignore excludes personal config, keys, recordings, weights, runtime binaries, virtualenvs and build caches
 - [x] Native microphone guard: owned virtual capture, source-removal discard, observer-failure discard, no ASR on either failed take (`evidence/native-audio.json`); current installed-app screenshots and independent reviews; owned observer exits when its test parent is killed (`evidence/native-guard-parent-exit.json`)
-- [ ] GitHub SSH push and remote commit verification
+- [x] GitHub SSH push and remote commit verification: application commit `d3c6de2bcf5455846f0a1167fce5f9e3ca548db4` on `master`; GitHub Actions passed Python 3.11 and 3.13 on Ubuntu 24.04 (`evidence/github-delivery.json`)
 
-SSH successfully authenticated as `Tatarus9450`; the origin remote uses `git@github.com:Tatarus9450/PhimThaiMaiPen.git`. Publishing follows the user's explicit instruction. Do not interpret local tests as a completed remote push
+SSH successfully authenticated as `Tatarus9450`; the origin remote uses `git@github.com:Tatarus9450/PhimThaiMaiPen.git`. The application commit was pushed and matched the remote branch, following the user's explicit instruction. A later documentation-only commit records these results
 
 ## Deferred work and explicit limits
 

@@ -19,9 +19,10 @@
     "native_audio": "native-audio.json",
     "guard_parent_exit": "native-guard-parent-exit.json",
     "gpu_and_cpu_fallback": "flatpak-vulkan-worker.json",
-    "desktop_permissions": "desktop-interactive-analysis.json"
+    "desktop_permissions": "desktop-interactive-analysis.json",
+    "github_delivery": "github-delivery.json"
   },
-  "scope": "Application delivery and source publication; hardware limitations documented. No Flathub publication. GitHub Actions has not run yet.",
+  "scope": "Application delivery and GitHub source publication; hardware limitations documented. No Flathub publication. GitHub Actions passed both Python 3.11 and 3.13; see github-delivery.json.",
   "source_sha256": {
     "phimthai/__init__.py": "25c0dd96b9ea810f73a15849d2994f16037bac8ba30e543cf8c041bccb5b0023",
     "phimthai/__main__.py": "a67c172046323b0efcafe92cb83abc266d5dd4bc931d9312cde1b7bed50643db",

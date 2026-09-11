@@ -1,0 +1,26 @@
+{
+  "repository": "Tatarus9450/PhimThaiMaiPen",
+  "transport": "SSH",
+  "account": "Tatarus9450",
+  "branch": "master",
+  "application_commit": "d3c6de2bcf5455846f0a1167fce5f9e3ca548db4",
+  "verified_remote_matches_application_commit": true,
+  "workflow_url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34642976090",
+  "jobs": [
+    {
+      "id": 103406922372,
+      "name": "tests (3.13)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34642976090/job/103406922372"
+    },
+    {
+      "id": 103406922615,
+      "name": "tests (3.11)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34642976090/job/103406922615"
+    }
+  ],
+  "scope": "Source publication and native application. These CI jobs verify application code on Ubuntu 24.04 with Python 3.11 and 3.13, not microphone/desktop/NPU hardware compatibility."
+}

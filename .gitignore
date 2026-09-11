@@ -26,8 +26,15 @@ config.env
 *.onnx
 *.gguf
 *.ggml
+*.q4nx
+*.bin
+*.tflite
 *.pt
 *.pth
+settings.json
+desktop-sessions.json
+/history/
+/audio-history/
 
 # ── Runtime temp files ──
 *.wav
