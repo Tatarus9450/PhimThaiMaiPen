@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Qt, QUrl, Signal
-from PySide6.QtMultimedia import QSoundEffect
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QApplication
 
 
@@ -32,13 +32,22 @@ class DictationFeedback(QObject):
         app = QApplication.instance()
         self._interactive = app is not None and app.platformName() not in {"offscreen", "minimal"}
         self.sounds = {}
+        self.audio_outputs = {}
         for name in (("start", "stop", "mode", "ready") if self._interactive else ()):
-            sound = QSoundEffect(self)
-            sound.setLoopCount(1)
-            sound.setVolume(.25)
+            # QSoundEffect uses PipeWire's shared Notification role. KDE may
+            # mute that group even when dictation feedback is enabled here.
+            # Use regular application playback without changing system mutes.
+            sound = QMediaPlayer(self)
+            output = QAudioOutput(sound)
+            output.setVolume(1.0 if name == "ready" else .65)
+            sound.setAudioOutput(output)
+            sound.setLoops(1)
+            sound.errorOccurred.connect(lambda _error, message:
+                self.unavailable.emit("เล่นเสียงแจ้งไม่ได้: " + message))
             sound.setSource(QUrl.fromLocalFile(str(Path(__file__).parent / "assets" /
                                                   ("feedback-" + name + ".wav"))))
             self.sounds[name] = sound
+            self.audio_outputs[name] = output
         self.process = QProcess(self)
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("QT_QPA_PLATFORM", "xcb")

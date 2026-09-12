@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0.dev4",
+  "checked_at": "2026-09-12T04:57:14.566775+00:00",
+  "scope": "Own cue playback only; no microphone, clipboard or capture of other applications. Ready sound twice; disabled feedback prevents third playback. User separately confirmed hearing the same QMediaPlayer playback probe. System Notification mute was preserved.",
+  "ready_volume": 1.0,
+  "events": [
+    "PlayingState",
+    "StoppedState",
+    "PlayingState",
+    "StoppedState"
+  ],
+  "output_observations": [
+    {
+      "label": "first",
+      "state": "running",
+      "role": "Music",
+      "muted": false
+    },
+    {
+      "label": "repeat",
+      "state": "running",
+      "role": "Music",
+      "muted": false
+    }
+  ],
+  "errors": [],
+  "source_sha256": "2272b46964d8f411f82af4651937a035cdde4e76eb0aa8935a39c42e4de78cc2",
+  "system_notification_still_muted": true,
+  "regression_tests_passed": 112
+}
