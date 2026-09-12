@@ -22,6 +22,7 @@ from .audio import Recorder
 from .appearance import GlassCanvas, GlassPanel, apply_style
 from .clipboard import ClipboardTransaction
 from .devices import inventory, openvino_devices
+from .feedback import DictationFeedback
 from .jobs import JobController
 from .models import CATALOG, installed_size, local_model, model_dir, remove
 from .settings import Settings, data_dir, load_settings, save_settings
@@ -69,6 +70,10 @@ class MainWindow(QMainWindow):
         self.last_request = None
         self.quitting = False
         self.tray = None
+        headless = QGuiApplication.platformName() in {"offscreen", "minimal"}
+        self.feedback = DictationFeedback(self, sound_enabled=self.settings.sound_feedback and not headless,
+                                         popup_enabled=self.settings.popup_enabled and not headless)
+        self.feedback.set_profile(self.settings.profile)
         self.jobs = JobController(self, temp_root=self.temp.name)
         self.jobs.changed.connect(self.set_status)
         self.jobs.result.connect(self.completed)
@@ -77,11 +82,15 @@ class MainWindow(QMainWindow):
         self.recorder.failed.connect(self.capture_error)
         self.clipboard = ClipboardTransaction(self)
         self.paste_busy = False
-        self.clipboard.restored.connect(lambda: setattr(self, "paste_busy", False))
+        self.paste_request_id = None
+        self.paste_inflight = None
+        self.paste_committed = False
+        self.clipboard.restored.connect(self.clipboard_restored)
         self.paste_timer = QTimer(self)
         self.paste_timer.setSingleShot(True)
         self.paste_timer.timeout.connect(self.send_paste)
         self.build_ui()
+        self.feedback.unavailable.connect(self.set_status)
         self.recorder.media_devices.audioInputsChanged.connect(self.refresh_microphones)
         self.recorder.level.connect(self.level.setValue)
         self.record_timer = QTimer(self)
@@ -303,6 +312,12 @@ class MainWindow(QMainWindow):
         self.reduced_transparency.setChecked(self.settings.reduced_transparency)
         self.reduced_transparency.toggled.connect(lambda checked: apply_style(QApplication.instance(), reduced_transparency=checked))
         form.addRow(self.reduced_transparency)
+        self.popup_enabled = QCheckBox("แสดง Popup เล็กด้านซ้ายขณะพูด")
+        self.popup_enabled.setChecked(self.settings.popup_enabled)
+        form.addRow(self.popup_enabled)
+        self.sound_feedback = QCheckBox("เสียงแจ้งเริ่ม หยุด และวางข้อความ")
+        self.sound_feedback.setChecked(self.settings.sound_feedback)
+        form.addRow(self.sound_feedback)
         layout.addLayout(form)
         layout.addWidget(QLabel("พจนานุกรมส่วนตัว · คำเดิม ตามด้วย Tab และคำที่ให้แทน"))
         self.dictionary = QPlainTextEdit(self.settings.dictionary)
@@ -357,6 +372,7 @@ class MainWindow(QMainWindow):
             dictionary=self.dictionary.toPlainText(), keep_history=self.history.isChecked(),
             keep_audio_history=self.audio_history.isChecked(), remember_desktop=self.remember_desktop.isChecked(),
             reduced_transparency=self.reduced_transparency.isChecked(),
+            popup_enabled=self.popup_enabled.isChecked(), sound_feedback=self.sound_feedback.isChecked(),
             onboarding_done=True).validate()
 
     def save(self):
@@ -364,6 +380,8 @@ class MainWindow(QMainWindow):
             previous_hotkey = self.settings.hotkey
             self.settings = self.current_settings()
             save_settings(self.settings)
+            self.feedback.configure(sound_enabled=self.settings.sound_feedback,
+                                    popup_enabled=self.settings.popup_enabled)
             if not self.settings.remember_desktop:
                 from .portals import state_path
                 state_path().unlink(missing_ok=True)
@@ -421,8 +439,7 @@ class MainWindow(QMainWindow):
         if next_profile == "th_to_eng" and local_model("translate-th-en") is None:
             message += " · ต้องดาวน์โหลดโมเดลแปลภาษาในหน้าโมเดล"
         self.set_status(message)
-        if self.tray and self.tray.isVisible():
-            self.tray.showMessage("PhimThaiMaiPen", message, QSystemTrayIcon.MessageIcon.Information, 1800)
+        self.feedback.mode(PROFILE_NAMES[next_profile])
 
     def kde_shortcut_command(self, trigger=None):
         # D-Bus timeouts and registration must never freeze recording controls.
@@ -469,6 +486,7 @@ class MainWindow(QMainWindow):
     def error(self, message):
         self.set_status("Error: " + message)
         self.nav.setCurrentRow(0)
+        self.feedback.error(message)
 
     def job_failed(self, message):
         warnings = self.cleanup_temporary_audio()
@@ -495,6 +513,8 @@ class MainWindow(QMainWindow):
             self.record_timer.start(200)
             self.nav.setCurrentRow(0)
             self.set_status("กำลังฟัง… พูดจบแล้วกดหยุดพูดหรือปุ่มลัดอีกครั้ง")
+            self.feedback.set_profile(self.record_settings.profile)
+            self.feedback.listening()
         except Exception as exc:
             self.recorder.stop()
             self.test_microphone = False
@@ -503,6 +523,7 @@ class MainWindow(QMainWindow):
     def record_tick(self):
         seconds = int(time.monotonic() - self.record_started)
         self.set_status(f"กำลังฟัง…  {seconds // 60:02d}:{seconds % 60:02d}  ·  กดอีกครั้งเมื่อพูดจบ")
+        self.feedback.tick(seconds)
         if seconds >= (5 if self.test_microphone else 900):
             self.finish_recording()
 
@@ -516,6 +537,7 @@ class MainWindow(QMainWindow):
             self.audio_path.unlink(missing_ok=True)
             self.audio_path = None
             self.set_status("Microphone test finished" if valid else "No audio captured")
+            self.feedback.cancel()
         elif valid:
             self.transcribe(self.audio_path, self.record_settings)
         else:
@@ -554,6 +576,7 @@ class MainWindow(QMainWindow):
             if self.downloading_model == settings.model or (settings.profile == "th_to_eng" and self.downloading_model == "translate-th-en"):
                 raise RuntimeError("Wait for the selected model download or repair to finish")
             self.jobs.submit(settings, action="transcribe", audio=str(path))
+            self.feedback.processing()
         except Exception as exc:
             self.error(str(exc))
 
@@ -582,6 +605,7 @@ class MainWindow(QMainWindow):
             warnings = self.cleanup_temporary_audio()
             self.set_status("No speech detected. Check the microphone or disable speech detection for a quiet voice." +
                             (" " + "; ".join(warnings) if warnings else ""))
+            self.feedback.error("ไม่พบเสียงพูด ลองตรวจไมโครโฟน")
             return
         self.onboarding.hide()
         # A transcript must remain available even when optional persistence fails.
@@ -627,8 +651,9 @@ class MainWindow(QMainWindow):
         warnings.extend(self.cleanup_temporary_audio())
         self.set_status("; ".join(warnings) or "Transcript ready — edit, copy, or paste")
         if job_settings.paste_mode == "immediate" and result.get("text"):
-            self.paste()
+            self.paste(automatic=True)
         else:
+            self.feedback.success()
             self.showNormal()
             self.raise_()
 
@@ -643,10 +668,19 @@ class MainWindow(QMainWindow):
                     warnings.append(f"Could not remove temporary audio: {exc}")
         return warnings
 
-    def cancel(self):
+    def clipboard_restored(self):
         self.paste_busy = False
+        self.paste_committed = False
+        if self.quitting:
+            QTimer.singleShot(0, self.quit)
+
+    def cancel(self):
+        self.feedback.cancel()
+        self.paste_busy = self.paste_committed
+        self.paste_request_id = None
         self.paste_timer.stop()
-        self.clipboard.restore()
+        if not self.paste_committed:
+            self.clipboard.restore()
         if self.recording:
             self.record_timer.stop()
             self.recorder.stop()
@@ -658,13 +692,20 @@ class MainWindow(QMainWindow):
         self.jobs.cancel()
 
     def copy(self):
+        if self.paste_committed:
+            self.error("รอการวางครั้งก่อนจบ แล้วลองคัดลอกอีกครั้ง")
+            return
         self.paste_busy = False
+        self.paste_request_id = None
         self.paste_timer.stop()
         self.clipboard.restore()
         QGuiApplication.clipboard().setText(self.editor.toPlainText())
         self.set_status("Copied — clipboard kept for manual pasting")
 
-    def paste(self):
+    def paste(self, automatic=False):
+        if self.paste_inflight:
+            self.error("รอการวางครั้งก่อนจบ แล้วลองวางอีกครั้ง")
+            return
         if self.paste_timer.isActive() or self.paste_busy:
             return
         if not self.editor.toPlainText():
@@ -677,9 +718,12 @@ class MainWindow(QMainWindow):
             return
         self.clipboard.offer(self.editor.toPlainText())
         self.paste_busy = True
-        self.set_status("Switch to your target app — sending paste in 3 seconds")
-        self.showMinimized()
-        self.paste_timer.start(3000)
+        self.paste_request_id = uuid.uuid4().hex
+        delay = 250 if automatic and not self.isActiveWindow() else 3000
+        self.set_status("กำลังวางข้อความ…" if delay == 250 else "สลับไปช่องข้อความปลายทาง จะวางให้ใน 3 วินาที")
+        if self.isVisible():
+            self.showMinimized()
+        self.paste_timer.start(delay)
 
     def send_paste(self):
         if self.portal_permission_pending:
@@ -692,6 +736,8 @@ class MainWindow(QMainWindow):
             self.set_status("Paste cancelled because the clipboard changed")
 
     def portal_command(self, action, **options):
+        if action == "paste" and self.paste_inflight:
+            return
         if action == "paste" and (self.portal_permission_pending or not self.paste_busy
                                   or not self.paste_enabled or not self.clipboard.owns_clipboard()):
             self.clipboard.restore()
@@ -707,6 +753,10 @@ class MainWindow(QMainWindow):
             self.clipboard.restore()
             self.paste_busy = False
             self.portal_permission_pending = True
+        if action == "paste":
+            self.paste_inflight = self.paste_request_id
+            self.paste_committed = True
+            options["request_id"] = self.paste_request_id
         payload = json.dumps(dict(action=action, **options)) + "\n"
         if self.portal is None:
             self.portal = QProcess(self)
@@ -739,7 +789,15 @@ class MainWindow(QMainWindow):
                 self.paste_enabled = True
                 self.set_status("Paste permission enabled" + ("; desktop supports restoring it on launch" if response.get("persistent") else " for this session"))
             elif event == "paste_sent":
+                request_id = response.get("request_id")
+                if not request_id or request_id != self.paste_inflight:
+                    continue
+                self.paste_inflight = None
+                if not self.paste_busy or request_id != self.paste_request_id:
+                    self.clipboard.restore_later()
+                    continue
                 self.clipboard.restore_later()
+                self.feedback.typing()
                 self.set_status("Paste keys sent. Check the target app; clipboard will be restored.")
             elif event == "shortcuts_enabled":
                 self.portal_shortcut = response.get("trigger", "Configured by desktop")
@@ -753,7 +811,17 @@ class MainWindow(QMainWindow):
             elif event == "paste_disabled":
                 self.paste_enabled = False
             elif event == "error":
-                self.clipboard.restore()
+                if response.get("action") == "paste":
+                    request_id = response.get("request_id")
+                    if not request_id or request_id != self.paste_inflight:
+                        continue
+                    self.paste_inflight = None
+                    if not self.paste_busy or request_id != self.paste_request_id:
+                        self.clipboard.restore_later()
+                        continue
+                    self.clipboard.restore_later()
+                else:
+                    self.clipboard.restore()
                 self.error(response["error"])
             elif event == "warning":
                 self.set_status(response["error"])
@@ -762,13 +830,17 @@ class MainWindow(QMainWindow):
 
     def portal_finished(self):
         self.paste_enabled = False
+        self.paste_inflight = None
         self.portal_permission_pending = False
         self.portal = None
         self.portal_buffer = b""
         self.portal_shortcut = ""
         self.portal_mode_shortcut = ""
         self.refresh_shortcut_status()
-        self.clipboard.restore()
+        if self.paste_committed:
+            self.clipboard.restore_later()
+        else:
+            self.clipboard.restore()
 
     def portal_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
@@ -947,7 +1019,10 @@ class MainWindow(QMainWindow):
             return
         self.quitting = True
         self.cancel()
-        self.clipboard.restore()
+        if self.paste_committed:
+            self.set_status("กำลังจบการวางข้อความ รอสักครู่แล้วแอปจะปิดให้")
+            event.ignore()
+            return
         if self.shortcut_process and self.shortcut_installing:
             # Let the desktop transaction finish or roll back before exiting.
             self.set_status("กำลังตั้งปุ่มลัด รอสักครู่แล้วแอปจะปิดให้")
@@ -963,12 +1038,13 @@ class MainWindow(QMainWindow):
             self.portal.kill()
             self.portal.waitForFinished(3000)
         self.temp.cleanup()
+        self.feedback.shutdown()
         event.accept()
 
     def quit(self):
         self.quitting = True
         self.close()
-        if not (self.shortcut_process and self.shortcut_installing):
+        if not self.paste_committed and not (self.shortcut_process and self.shortcut_installing):
             QApplication.instance().quit()
 
     def setup_tray(self):
@@ -1073,7 +1149,11 @@ def main():
                     "version": __version__, "recording": window.recording,
                     "busy": window.jobs.busy, "transcript_characters": len(window.editor.toPlainText()),
                     "shortcut": window.shortcut_hint.text(), "mode_shortcut": window.mode_shortcut_hint.text(),
-                    "profile": window.profile.currentData(), "visible": window.isVisible()}) + "\n").encode())
+                    "profile": window.profile.currentData(), "visible": window.isVisible(),
+                    "paste_mode": window.paste_mode.currentData(), "paste_enabled": window.paste_enabled,
+                    "permission_pending": window.portal_permission_pending,
+                    "popup": window.feedback.last_report, "popup_error": window.feedback.popup_error,
+                    "status": window.status.text()}) + "\n").encode())
                 socket.flush()
             socket.disconnectFromServer()
             socket.deleteLater()
@@ -1081,7 +1161,8 @@ def main():
         if socket.bytesAvailable():
             read_command()
     server.newConnection.connect(receive)
-    window.show()
+    if not any(flag in sys.argv for flag in ("--toggle", "--cycle-mode")):
+        window.show()
     if "--smoke" in sys.argv:
         QTimer.singleShot(1000, window.quit)
     elif "--toggle" in sys.argv:

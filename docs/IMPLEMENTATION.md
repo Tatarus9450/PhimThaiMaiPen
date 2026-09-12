@@ -83,3 +83,16 @@ Stop the new app and workers. Existing legacy environment/model cache remain ava
 - เครื่องทดสอบถอน Flatpak เก่าและ legacy autostart/profile launcher แล้ว โดยเก็บโมเดล ตั้งค่า ประวัติ และ source
 
 หลักฐาน: [KDE registration](evidence/kde-shortcut.json), [KDE → launcher → IPC](evidence/kde-shortcut-route.json), [Native UI](evidence/ui-liquid-glass.json) เส้นทางเริ่ม–หยุดทดสอบด้วย WAV จำลองและหยุดที่ขอบเขตส่งงาน ASR ไม่ใช่การกดแป้นจริงหรือ benchmark โมเดลใหม่ ผล ASR/GPU/NPU เดิมยังเป็นหลักฐานของชุดทดสอบก่อนหน้า
+
+
+## 2026-09-12 — กลับสู่ flow พูดแล้ววาง พร้อม Popup รุ่นเดิม (2.0.0.dev3)
+
+หลังผู้ใช้ทดสอบจริง พบว่า Meta+H และไมค์ทำงานแล้ว แต่โหมด review ทำให้ข้อความหยุดอยู่ใน editor ผู้ใช้ต้องการวางทันทีและ Popup/เสียงแบบรุ่นเดิม
+
+- ตั้งเครื่องผู้ใช้เป็น immediate paste และจำสิทธิ์ portal ตรวจจากแอปจริงว่า KDE อนุญาตวางแล้ว
+- Popup 200×52 ห่างซ้าย32px กึ่งกลางแนวตั้ง ใช้ XWayland/XCB override-redirect แยก process เพราะ Qt Wayland tool window แบบเดิมแย่งโฟกัสและอยู่กลางจอ
+- แสดง Listening / Thinking / Typing พร้อม MIX / RAW / TH>ENG และเล่น notification.wav เดิมเมื่อส่งวาง พร้อมเสียงเริ่ม–หยุดและสลับโหมด
+- เรียกจาก Meta+H/Meta+Shift+H แล้วไม่เปิดหน้าต่างหลักแทรก แอปที่อยู่เบื้องหลังส่งวางหลังหน่วง250ms ส่วนปุ่มวางจากหน้าตรวจแก้ยังหน่วง3s
+- เก็บและคืนข้อความร่างผ่าน accessibility เฉพาะแอปตัวเองก่อนรีสตาร์ต ตรวจเท่ากันแล้วลบสำเนาชั่วคราว ไม่บันทึกเนื้อหาในหลักฐานหรือGit
+
+หลักฐาน: [การกดปุ่มจริงของผู้ใช้](evidence/kde-user-shortcut.json), [ขนาด ตำแหน่ง และโฟกัส Popup](evidence/left-popup.json) การกดจริงยืนยันว่า KDE ส่ง --toggle ถึงแอปถูกต้อง จากนั้นพบปัญหาเพิ่มเมื่อใช้แป้นภาษาไทย: `NotifyKeyboardKeysym(v)` ส่ง key ที่ปลายทางไม่รู้จัก จึงเปลี่ยนเป็น evdev `NotifyKeyboardKeycode` พร้อมปล่อย Ctrl แม้คำสั่งปล่อย V ล้มเหลว แยกรหัสคำสั่งวางและรอคำสั่งที่ส่งแล้วจบก่อนยอมให้วางครั้งใหม่ เพื่อไม่ให้ ACK เก่าหลังยกเลิกคืนคลิปบอร์ดของงานถัดไป ทดสอบวางข้อความสังเคราะห์เข้า Wayland editor จริงผ่านทั้งแป้นไทยและอังกฤษ เก็บหลักฐาน [ก่อนและหลังแก้การวาง](evidence/paste-keyboard-layouts.json) การทดสอบหลังแก้ใช้ปุ่มวาง 3 วินาที ส่วนเส้นทางอัตโนมัติ 250ms ตรวจด้วย regression test และรอผู้ใช้ยืนยันในแอปปลายทางจริง

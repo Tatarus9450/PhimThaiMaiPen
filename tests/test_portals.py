@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
-from dbus_next import Message, Variant
+from dbus_next import Message, MessageType, Variant
 from phimthai import portals
 
 
@@ -116,6 +117,82 @@ class PortalConsentTests(unittest.IsolatedAsyncioTestCase):
             portals.state_path().write_text(raw)
             await self.client.restore()
         self.client.session.assert_not_awaited()
+
+
+class PortalPasteKeycodeTests(unittest.IsolatedAsyncioTestCase):
+    """Physical evdev keys remain the same under Thai and English layouts."""
+
+    def setUp(self):
+        self.client = portals.Portals()
+        self.client.remote = "/test/keyboard-session"
+        self.success = SimpleNamespace(message_type=MessageType.METHOD_RETURN)
+        self.client.bus = SimpleNamespace(call=AsyncMock(return_value=self.success))
+        emitter = patch.object(portals, "emit")
+        self.events = emitter.start()
+        self.addCleanup(emitter.stop)
+
+    def sent_keys(self):
+        return [tuple(call.args[0].body[-2:]) for call in self.client.bus.call.await_args_list]
+
+    async def test_uses_evdev_control_v_press_then_reverse_release(self):
+        await self.client.paste("test-request")
+        self.assertEqual(self.sent_keys(), [(29, 1), (47, 1), (47, 0), (29, 0)])
+        for call in self.client.bus.call.await_args_list:
+            message = call.args[0]
+            self.assertEqual(message.member, "NotifyKeyboardKeycode")
+            self.assertEqual(message.interface, "org.freedesktop.portal.RemoteDesktop")
+            self.assertEqual(message.destination, portals.DEST)
+            self.assertEqual(message.path, portals.PATH)
+            self.assertEqual(message.signature, "oa{sv}iu")
+            self.assertEqual(message.body[:2], [self.client.remote, {}])
+        self.events.assert_called_once_with(event="paste_sent", request_id="test-request")
+
+    async def test_missing_permission_never_sends_keyboard_events(self):
+        self.client.remote = None
+        with self.assertRaisesRegex(RuntimeError, "Enable paste permission"):
+            await self.client.paste()
+        self.client.bus.call.assert_not_awaited()
+        self.events.assert_not_called()
+
+    async def test_press_failure_still_attempts_both_releases_without_success_ack(self):
+        for keycode in (29, 47):
+            for failure in ("transport", "dbus-error"):
+                with self.subTest(keycode=keycode, failure=failure):
+                    self.client.bus.call.reset_mock()
+                    self.events.reset_mock()
+
+                    async def response(message):
+                        if tuple(message.body[-2:]) == (keycode, 1):
+                            if failure == "transport":
+                                raise OSError("Synthetic keyboard transport failure")
+                            return SimpleNamespace(message_type=MessageType.ERROR)
+                        return self.success
+
+                    self.client.bus.call.side_effect = response
+                    with self.assertRaises(Exception):
+                        await self.client.paste()
+                    self.assertEqual(self.sent_keys()[-2:], [(47, 0), (29, 0)])
+                    self.events.assert_not_called()
+
+    async def test_release_failure_cannot_skip_control_release_or_claim_success(self):
+        for keycode in (47, 29):
+            for failure in ("transport", "dbus-error"):
+                with self.subTest(keycode=keycode, failure=failure):
+                    self.client.bus.call.reset_mock()
+                    self.events.reset_mock()
+
+                    async def response(message):
+                        if tuple(message.body[-2:]) == (keycode, 0):
+                            if failure == "transport":
+                                raise OSError("Synthetic keyboard release failure")
+                            return SimpleNamespace(message_type=MessageType.ERROR)
+                        return self.success
+
+                    self.client.bus.call.side_effect = response
+                    with self.assertRaisesRegex(RuntimeError, "Keyboard release failed"):
+                        await self.client.paste()
+                    self.assertEqual(self.sent_keys(), [(29, 1), (47, 1), (47, 0), (29, 0)])
+                    self.events.assert_not_called()
 
 
 if __name__ == "__main__":

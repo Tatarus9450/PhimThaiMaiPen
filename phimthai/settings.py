@@ -30,6 +30,8 @@ class Settings:
     onboarding_done: bool = False
     hotkey: str = "Meta+H"
     reduced_transparency: bool = False
+    sound_feedback: bool = True
+    popup_enabled: bool = True
     cpu_threads: int = field(default_factory=lambda: min(6, os.cpu_count() or 1))
     dictionary: str = ""
     vad: bool = True

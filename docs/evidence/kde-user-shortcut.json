@@ -1,0 +1,92 @@
+{
+  "scope": "User-generated physical Meta+H attempts, observed only through this application launcher; no injected key or Record invocation by agent",
+  "observations": [
+    {
+      "pid": 297304,
+      "ppid": 1335,
+      "arguments": [
+        "--toggle"
+      ],
+      "cwd": "/home/task",
+      "XDG_RUNTIME_DIR": "/run/user/1000",
+      "TMPDIR": null,
+      "XDG_CONFIG_HOME": null,
+      "XDG_DATA_HOME": null,
+      "module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/__init__.py",
+      "version": "2.0.0.dev2",
+      "lock_exists": true,
+      "lock_pid": 295149,
+      "time_utc": "2026-09-12T04:06:58.357673+00:00"
+    },
+    {
+      "pid": 297332,
+      "ppid": 1335,
+      "arguments": [
+        "--toggle"
+      ],
+      "cwd": "/home/task",
+      "XDG_RUNTIME_DIR": "/run/user/1000",
+      "TMPDIR": null,
+      "XDG_CONFIG_HOME": null,
+      "XDG_DATA_HOME": null,
+      "module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/__init__.py",
+      "version": "2.0.0.dev2",
+      "lock_exists": true,
+      "lock_pid": 295149,
+      "time_utc": "2026-09-12T04:07:01.577382+00:00"
+    },
+    {
+      "pid": 297446,
+      "ppid": 1335,
+      "arguments": [
+        "--toggle"
+      ],
+      "cwd": "/home/task",
+      "XDG_RUNTIME_DIR": "/run/user/1000",
+      "TMPDIR": null,
+      "XDG_CONFIG_HOME": null,
+      "XDG_DATA_HOME": null,
+      "module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/__init__.py",
+      "version": "2.0.0.dev2",
+      "lock_exists": true,
+      "lock_pid": 295149,
+      "time_utc": "2026-09-12T04:07:17.526323+00:00"
+    },
+    {
+      "pid": 297466,
+      "ppid": 1335,
+      "arguments": [
+        "--toggle"
+      ],
+      "cwd": "/home/task",
+      "XDG_RUNTIME_DIR": "/run/user/1000",
+      "TMPDIR": null,
+      "XDG_CONFIG_HOME": null,
+      "XDG_DATA_HOME": null,
+      "module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/__init__.py",
+      "version": "2.0.0.dev2",
+      "lock_exists": true,
+      "lock_pid": 295149,
+      "time_utc": "2026-09-12T04:07:21.037815+00:00"
+    }
+  ],
+  "user_confirmation": "Parent relayed user confirmation that physical Meta+H starts listening after trace was armed",
+  "last_read_only_status": {
+    "pid": 295149,
+    "recording": false,
+    "busy": false,
+    "transcript_characters": 23,
+    "profile": "smart"
+  },
+  "launcher_restored": true,
+  "launcher_sha256": "e5163d139303d1455305e810239d9469f65060e271dd7e7dd903d60d6d11fd74",
+  "original_sha256": "e5163d139303d1455305e810239d9469f65060e271dd7e7dd903d60d6d11fd74",
+  "restored_at_utc": "2026-09-12T04:09:15.067849+00:00",
+  "limits": [
+    "The temporary wrapper added bounded startup logging and an extra Python exec; it did not change arguments, environment, target interpreter or shortcut binding.",
+    "No shortcut-binding fix was applied during this diagnosis; the original launcher was restored byte-for-byte.",
+    "The agent did not read transcript content, access microphone audio or inject key events.",
+    "Automatic paste and popup/sound feedback are handled separately by the parent task."
+  ],
+  "user_clarification": "Parent relayed user confirmation that physical shortcuts and microphone capture work; the unresolved symptoms are missing automatic paste and popup/sound feedback."
+}

@@ -126,7 +126,7 @@ class TranscriptPersistenceFailureTests(IsolatedDataTest):
         with patch("phimthai.app.save_settings", side_effect=OSError("config disk full")):
             self.window.completed({"id": "setup-error", "text": "new transcript", "settings": asdict(settings)})
         self.assertEqual(self.window.editor.toPlainText(), "new transcript")
-        self.window.paste.assert_called_once_with()
+        self.window.paste.assert_called_once_with(automatic=True)
         self.assertIn("config disk full", self.window.status.text())
         self.assertFalse(self.window.settings.onboarding_done)
 
@@ -138,7 +138,7 @@ class TranscriptPersistenceFailureTests(IsolatedDataTest):
         settings = Settings(keep_history=True, paste_mode="immediate")
         self.window.completed({"id": "history-error", "text": "retained transcript", "settings": asdict(settings)})
         self.assertEqual(self.window.editor.toPlainText(), "retained transcript")
-        self.window.paste.assert_called_once_with()
+        self.window.paste.assert_called_once_with(automatic=True)
         self.assertIn("history could not be saved", self.window.status.text())
 
     def test_audio_history_uses_job_opt_in_and_copies_before_temporary_cleanup(self):

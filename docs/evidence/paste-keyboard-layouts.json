@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0.dev3",
+  "checked_at": "2026-09-12T04:41:55.915632+00:00",
+  "platform": "KDE Plasma / Wayland",
+  "scope": "Actual installed application, granted RemoteDesktop session and owned Wayland QPlainTextEdit target. Before: Retry of retained local audio triggered automatic 250 ms paste. After: own app Paste button via accessibility, 3 s delay, synthetic Thai/English text, both keyboard layouts. No microphone used. User draft preserved; no user transcript, audio, clipboard contents or hashes retained in this evidence. Headless tests separately cover automatic 250 ms dispatch and cancelled acknowledgements.",
+  "before_thai_layout": {
+    "target_received_text": false,
+    "key_events": [
+      {
+        "key": 16777249,
+        "modifiers": 67108864,
+        "active": true
+      },
+      {
+        "key": 0,
+        "modifiers": 0,
+        "active": true
+      }
+    ]
+  },
+  "after": [
+    {
+      "layout": "Thai",
+      "target_matches_synthetic_text": true,
+      "synthetic_characters": 34,
+      "target_kept_focus": true,
+      "key_events": [
+        {
+          "key": 16777249,
+          "modifiers": 67108864,
+          "active": true
+        },
+        {
+          "key": 86,
+          "modifiers": 67108864,
+          "active": true
+        }
+      ],
+      "clipboard_marker_seen": true,
+      "clipboard_marker_removed_after_restore": true
+    },
+    {
+      "layout": "English (US)",
+      "target_matches_synthetic_text": true,
+      "synthetic_characters": 34,
+      "target_kept_focus": true,
+      "key_events": [
+        {
+          "key": 16777249,
+          "modifiers": 67108864,
+          "active": true
+        },
+        {
+          "key": 86,
+          "modifiers": 67108864,
+          "active": true
+        }
+      ],
+      "clipboard_marker_seen": true,
+      "clipboard_marker_removed_after_restore": true
+    }
+  ],
+  "source_sha256": {
+    "phimthai/app.py": "a98b55b69e4433d2737c78d67ccb08df3fb5d770117f5859b4cc8717a72b4116",
+    "phimthai/portals.py": "3ed73ed565f9ca0a0220958864411f8b305d6387ecaa01df71f50509869e4365",
+    "phimthai/clipboard.py": "19a5721484087ce04c14a49ad7c5b45a0bbe42fdbd2a459ef5bdc129f63a7428"
+  },
+  "api_reference": "https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html#org-freedesktop-portal-remotedesktop-notifykeyboardkeycode",
+  "headless_suite": {
+    "tests": 112,
+    "result": "passed",
+    "command": ".venv-app/bin/python -m unittest discover -s tests -q"
+  }
+}

@@ -217,22 +217,36 @@ class Portals:
             except Exception as exc:
                 emit(event="error", error=str(exc))
 
-    async def paste(self):
+    async def paste(self, request_id=None):
         if not self.remote:
             raise RuntimeError("Enable paste permission in Settings, or use Copy")
-        async def key(keysym, state):
-            return await self.bus.call(Message(destination=DEST, path=PATH,
-                    interface="org.freedesktop.portal.RemoteDesktop", member="NotifyKeyboardKeysym",
-                    signature="oa{sv}iu", body=[self.remote, {}, keysym, state]))
+        async def key(keycode, state):
+            try:
+                return await asyncio.wait_for(self.bus.call(Message(destination=DEST, path=PATH,
+                        interface="org.freedesktop.portal.RemoteDesktop", member="NotifyKeyboardKeycode",
+                        signature="oa{sv}iu", body=[self.remote, {}, keycode, state])), timeout=5)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError("Keyboard request timed out") from exc
+        # Linux evdev KEY_LEFTCTRL / KEY_V. A Latin 'v' keysym cannot be
+        # resolved by KDE while the Thai keyboard layout is active.
         try:
-            for keysym, state in [(0xffe3, 1), (0x76, 1)]:
-                reply = await key(keysym, state)
+            for keycode in (29, 47):
+                reply = await key(keycode, 1)
                 if reply.message_type == MessageType.ERROR:
                     raise RuntimeError("Keyboard request failed")
         finally:
-            for keysym in (0x76, 0xffe3):
-                await key(keysym, 0)
-        emit(event="paste_sent")
+            release_error = None
+            for keycode in (47, 29):
+                try:
+                    reply = await key(keycode, 0)
+                    if reply.message_type == MessageType.ERROR:
+                        raise RuntimeError("Keyboard release failed")
+                except Exception as exc:
+                    # Still release Ctrl if releasing V failed.
+                    release_error = release_error or exc
+            if release_error:
+                raise RuntimeError("Keyboard release failed") from release_error
+        emit(event="paste_sent", request_id=request_id)
 
 
 async def main():
@@ -244,6 +258,7 @@ async def main():
         if not line:
             break
         action = None
+        request = {}
         try:
             request = json.loads(line)
             action = request["action"]
@@ -252,13 +267,14 @@ async def main():
             elif action == "enable_paste":
                 await portals.enable_paste(request.get("persist", False))
             elif action == "paste":
-                await portals.paste()
+                await portals.paste(request.get("request_id"))
             elif action == "restore":
                 await portals.restore()
             elif action == "forget":
                 state_path().unlink(missing_ok=True)
         except Exception as exc:
-            emit(event="error", error=str(exc))
+            emit(event="error", error=str(exc), action=action,
+                 request_id=request.get("request_id") if isinstance(request, dict) else None)
         finally:
             if action in {"shortcuts", "enable_paste", "restore"}:
                 emit(event="command_finished", action=action)

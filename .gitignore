@@ -39,6 +39,10 @@ desktop-sessions.json
 # ── Runtime temp files ──
 *.wav
 !notification.wav
+!phimthai/assets/feedback-start.wav
+!phimthai/assets/feedback-stop.wav
+!phimthai/assets/feedback-mode.wav
+!phimthai/assets/feedback-ready.wav
 *.flac
 *.mp3
 *.m4a

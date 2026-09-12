@@ -1,0 +1,83 @@
+{
+  "platform": "wayland",
+  "rows": [
+    {
+      "label": "before-popup",
+      "target_focus": true,
+      "helper": {},
+      "helper_error": "",
+      "owned_test_text_unchanged": true
+    },
+    {
+      "label": "listening",
+      "target_focus": true,
+      "helper": {
+        "event": "state",
+        "state": "listening",
+        "visible": true,
+        "x": 32,
+        "y": 374,
+        "width": 200,
+        "height": 52,
+        "focused": false
+      },
+      "helper_error": "",
+      "owned_test_text_unchanged": true
+    },
+    {
+      "label": "mode-listening",
+      "target_focus": true,
+      "helper": {
+        "event": "state",
+        "state": "listening",
+        "visible": true,
+        "x": 32,
+        "y": 374,
+        "width": 200,
+        "height": 52,
+        "focused": false
+      },
+      "helper_error": "",
+      "owned_test_text_unchanged": true
+    },
+    {
+      "label": "processing",
+      "target_focus": true,
+      "helper": {
+        "event": "state",
+        "state": "processing",
+        "visible": true,
+        "x": 32,
+        "y": 374,
+        "width": 200,
+        "height": 52,
+        "focused": false
+      },
+      "helper_error": "",
+      "owned_test_text_unchanged": true
+    },
+    {
+      "label": "typing",
+      "target_focus": true,
+      "helper": {
+        "event": "state",
+        "state": "typing",
+        "visible": true,
+        "x": 32,
+        "y": 374,
+        "width": 200,
+        "height": 52,
+        "focused": false
+      },
+      "helper_error": "",
+      "owned_test_text_unchanged": true
+    }
+  ],
+  "version": "2.0.0.dev3",
+  "checked_at": "2026-09-12T04:21:37.019991+00:00",
+  "scope": "Owned Wayland text field and isolated XCB HUD; no real microphone, clipboard write or user text. Sound playback separately tested with bundled notification.wav copy.",
+  "source_sha256": {
+    "phimthai/feedback.py": "983ff12502cf910b22f2a92da074493d676c7f3f50ee106698ba3950083abfcd"
+  },
+  "ready_sound_sha256": "f22b107113949b47e2d6b3ebf3ede67c2f2cb1fff8db2290071cf8652d6799e8"
+}

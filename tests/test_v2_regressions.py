@@ -205,7 +205,7 @@ class WindowSideEffectRegressionTests(IsolatedSettingsTest):
         history = data_dir() / "history/saved-job.txt"
         self.assertEqual(history.read_text(), "saved text")
         self.assertEqual(history.stat().st_mode & 0o777, 0o600)
-        self.window.paste.assert_called_once_with()
+        self.window.paste.assert_called_once_with(automatic=True)
 
     def test_cancel_prevents_delayed_paste_and_restores_offer(self):
         self.window.editor.setPlainText("do not insert this")
