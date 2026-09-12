@@ -1,0 +1,66 @@
+{
+  "scope": "Native package hashes; isolated rendered widgets, no live microphone/clipboard/hotkey input",
+  "source_commit": "f4403066500f14fd9959eb5a745be5b2277402df",
+  "native_install": {
+    "version": "2.0.0b3",
+    "package": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai",
+    "matches_source": {
+      "app.py": true,
+      "appearance.py": true,
+      "settings.py": true,
+      "models.py": true,
+      "external_models.py": true,
+      "portals.py": true,
+      "assets/io.github.tatarus9450.PhimThaiMaiPen.png": true
+    },
+    "desktop_icon_matches": true,
+    "running_window_restarted": false
+  },
+  "ui": {
+    "cases": 34,
+    "issues": 0,
+    "desktop_schemes": [
+      "light",
+      "dark"
+    ],
+    "surfaces": [
+      "glass",
+      "reduced-transparency"
+    ],
+    "sizes": [
+      [
+        820,
+        600
+      ],
+      [
+        1040,
+        760
+      ]
+    ],
+    "special_states": [
+      "recommended model downloading",
+      "ready transcript with synthetic example text"
+    ]
+  },
+  "tests": {
+    "application_suite": {
+      "passed": 144,
+      "timing": "before final availability test addition"
+    },
+    "focused_rerun": {
+      "passed": 37,
+      "includes": "new record availability test, first-launch/app regressions, 6 legacy ASR tests"
+    }
+  },
+  "icon": {
+    "file": "phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png",
+    "dimensions": [
+      512,
+      512
+    ],
+    "sha256": "f09c7ae9a1e7d9fd71b482d7b754241793f2da88036fe2beb8c26d9a2289b715",
+    "text": false,
+    "transparent": false,
+    "generator": "built-in ImageGen"
+  }
+}

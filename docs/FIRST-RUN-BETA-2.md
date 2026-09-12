@@ -14,9 +14,11 @@ Scope: application startup/settings/model management, compatible local model imp
 - [x] Import supported local model data into private managed storage with atomic publication and distinct local provenance; retain deletion and switching
 - [x] Keep Auto on CPU; label GPU/NPU Beta with a red development warning
 - [x] Test clean first launch, cancellation/relaunch, deletion, import integrity, permission denial and UI layouts without touching the running native app
-- [ ] Publish beta 2 source and Flatpak after clean build/runtime checks; verify public downloads
+- [x] Publish beta 2 source and Flatpak after clean build/runtime checks; verify public release metadata, downloaded proof files and checksum manifest (full bundle download not performed in this check)
 
-Evidence: app.py startup only restores opted-in desktop sessions; download is a manual QProcess action. models.py accepts static CATALOG IDs; worker validates those IDs in its own process. Auto may select GPU from benchmark history. portals.py emits completion after both successful and denied requests, so readiness must follow enabled events, not completion
+Release evidence: [beta 2 public verification](evidence/github-beta2-release.json) records successful CI run 34690301549 and public tag `v2.0.0-beta.2` at commit `6618a9d74d02d89804df9ab26957371258ceec7e`. All eight assets are public. The 406,106,648-byte Flatpak has API SHA-256 `8d1ed83a88a0cac7b9935223ce5869e1f4414858bb013ca1663d8a7e8da736a1`, matching the downloaded `SHA256SUMS`. ASR/build/smoke JSON and the checksum manifest were downloaded and independently hashed against API digests; the full beta 2 bundle was not downloaded, installed or locally hashed during this verification
+
+Packaged verification: first-launch defaults are Qwen3-ASR 0.6B, Smart Mix, Auto on CPU, pending model setup, unfinished desktop setup, remembered desktop grants and immediate paste. Packaged source matched all 32 files and 129 dependency checks passed. Offline CPU transcription passed two hash-pinned public FLEURS clips (Thai CER 2/75; English WER 1/19); these are functional checks, not a general accuracy benchmark. Distribution is a direct GitHub Flatpak beta, not Flathub
 
 Verification limits: automated tests isolate OS permissions, clipboard and microphone. A desktop may require the user's first consent and may not support the portal. Models must finish downloading before transcription can work. External model imports support the existing Qwen3-ASR and Whisper OpenVINO/GGML formats, not arbitrary model code
 

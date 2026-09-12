@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "checked_at": "2026-09-12T12:08:32+00:00",
+  "release": {
+    "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3",
+    "tag": "v2.0.0-beta.3",
+    "commit": "f4403066500f14fd9959eb5a745be5b2277402df",
+    "tag_ref_verified_via_public_api": true,
+    "draft": false,
+    "prerelease": true,
+    "published_at": "2026-09-12T12:04:42Z",
+    "assets_count": 8
+  },
+  "ci": {
+    "run_id": 34691442277,
+    "job_id": 103547556189,
+    "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34691442277/job/103547556189",
+    "conclusion": "success",
+    "head_sha": "f4403066500f14fd9959eb5a745be5b2277402df",
+    "application_checks": {
+      "run_id": 34691442371,
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34691442371",
+      "python": [
+        "3.11",
+        "3.13"
+      ],
+      "conclusion": "success"
+    }
+  },
+  "download_verification": {
+    "directory": "dist/github-beta.3",
+    "assets_downloaded": 8,
+    "atomic_temporary_files": true,
+    "all_sizes_match_api": true,
+    "all_sha256_match_api": true,
+    "sha256sum_all_assets_exit_code": 0,
+    "published_sha256sums_exit_code": 0,
+    "full_bundle_downloaded": true,
+    "local_bundle_hash_computed": true,
+    "bundle_bytes": 406518232,
+    "bundle_sha256": "3e9d4c6154dae20818ccf2f935b996fe727fc23170fa943e50c94bdd46c0d813",
+    "installed_or_run_locally": false
+  },
+  "assets": [
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-asr.json",
+      "bytes": 3258,
+      "api_sha256": "c790ee818cb6d24ea88a8b4a2f9795dd0f0d3d30e870422be78f2b663b84f7a6",
+      "downloaded_sha256": "c790ee818cb6d24ea88a8b4a2f9795dd0f0d3d30e870422be78f2b663b84f7a6",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-asr.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-build.json",
+      "bytes": 420,
+      "api_sha256": "55d2c2d55fdefd46cc151b583619ea098454d4290039532453a95130cbd749b6",
+      "downloaded_sha256": "55d2c2d55fdefd46cc151b583619ea098454d4290039532453a95130cbd749b6",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-build.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-constraints.txt",
+      "bytes": 794,
+      "api_sha256": "86b2ebb89fc21cfde185d9f7c734eb0e8a11abdcfba3bb335a554ffba238bfcd",
+      "downloaded_sha256": "86b2ebb89fc21cfde185d9f7c734eb0e8a11abdcfba3bb335a554ffba238bfcd",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-constraints.txt"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-manifest.json",
+      "bytes": 110005,
+      "api_sha256": "6cb45ad85e6be372db6660d6995df820e2b9a11888204743b99752365d0f8f48",
+      "downloaded_sha256": "6cb45ad85e6be372db6660d6995df820e2b9a11888204743b99752365d0f8f48",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-manifest.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-smoke.json",
+      "bytes": 208,
+      "api_sha256": "c69ec4ee3cc32e98a1559ac53aa235d24be9065e753911989aad3fafaf33d40f",
+      "downloaded_sha256": "c69ec4ee3cc32e98a1559ac53aa235d24be9065e753911989aad3fafaf33d40f",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-smoke.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-wheels.json",
+      "bytes": 16603,
+      "api_sha256": "03a79106e3d65ed18fd76cae7dac661d23d1009153e718fe1c35cb120c856ece",
+      "downloaded_sha256": "03a79106e3d65ed18fd76cae7dac661d23d1009153e718fe1c35cb120c856ece",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64-wheels.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak",
+      "bytes": 406518232,
+      "api_sha256": "3e9d4c6154dae20818ccf2f935b996fe727fc23170fa943e50c94bdd46c0d813",
+      "downloaded_sha256": "3e9d4c6154dae20818ccf2f935b996fe727fc23170fa943e50c94bdd46c0d813",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 109,
+      "api_sha256": "635e1a1cf7736b1b5ace438ab1af09f8721851a5126cc0a7ea80b490bb58fbf0",
+      "downloaded_sha256": "635e1a1cf7736b1b5ace438ab1af09f8721851a5126cc0a7ea80b490bb58fbf0",
+      "matches_api": true,
+      "downloaded": true,
+      "path": "dist/github-beta.3/SHA256SUMS"
+    }
+  ],
+  "build": {
+    "commit": "f4403066500f14fd9959eb5a745be5b2277402df",
+    "sdk_commit": "94e029e5b32c7d8bb1a44ff4492eca273c9886e55e33d7dba273c75e678353ca",
+    "runtime_commit": "3adaa41de78d95076617f743099ec3851b5ae4fcdadbaaa8b7df1412c705c56c",
+    "architecture": "x86_64",
+    "branch": "beta",
+    "models_bundled": false,
+    "dependency_policy": "Pinned upstream wheels; source-patched Qt Multimedia and Qwen; not a Flathub submission"
+  },
+  "runtime": {
+    "proof_asset": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-asr.json",
+    "status": "passed",
+    "version": "2.0.0b3",
+    "defaults": {
+      "model": "qwen-0.6b",
+      "device": "auto",
+      "profile": "smart",
+      "language": "auto"
+    },
+    "first_launch": {
+      "model_setup": "pending",
+      "desktop_setup_done": false,
+      "remember_desktop": true,
+      "paste_mode": "immediate"
+    },
+    "source": {
+      "files_checked": 32,
+      "matches_checkout": true,
+      "aggregate_sha256": "01911c80afdbfb589c341abe566d9946381896374a2ea518df3928be0f3fc9e8"
+    },
+    "desktop_icon": {
+      "path": "/app/share/icons/hicolor/512x512/apps/io.github.tatarus9450.PhimThaiMaiPen.png",
+      "sha256": "f09c7ae9a1e7d9fd71b482d7b754241793f2da88036fe2beb8c26d9a2289b715",
+      "matches_application": true
+    },
+    "dependencies": {
+      "requirements_checked": 129,
+      "failures": []
+    },
+    "versions": {
+      "PySide6": "6.11.1",
+      "shiboken6": "6.11.1",
+      "torch": "2.11.0+cpu",
+      "qwen-asr": "0.0.6",
+      "transformers": "4.57.6",
+      "dbus-next": "0.2.3",
+      "soundfile": "0.14.0"
+    },
+    "qt": {
+      "version": "6.11.1",
+      "audio_backend": "pulseaudio",
+      "audio_classes_imported": [
+        "QAudioSource",
+        "QAudioOutput",
+        "QMediaPlayer"
+      ],
+      "patched_library": true,
+      "ffmpeg_plugin": true
+    }
+  },
+  "asr": {
+    "proof_asset": "PhimThaiMaiPen-2.0.0-beta.3-x86_64-asr.json",
+    "status": "passed",
+    "network_disabled_in_ci": true,
+    "scope": "Packaged /app code, runtime-only, no GUI/audio capture/portal/clipboard/singleton. Temporary XDG state; read-only model and hash-pinned public audio. No transcript output.",
+    "model": {
+      "repository": "Qwen/Qwen3-ASR-0.6B",
+      "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+      "integrity_verified": true
+    },
+    "dataset": {
+      "name": "Google FLEURS",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/datasets/google/fleurs/tree/70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "limitation": "Two known public clips; functional smoke, not representative accuracy certification"
+    },
+    "samples": [
+      {
+        "file": "10026868752543983818.wav",
+        "sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+        "language": "Thai",
+        "device": "cpu",
+        "profile": "smart",
+        "metric": "CER",
+        "errors": 2,
+        "reference_units": 75,
+        "error_rate": 0.02666666666666667,
+        "wall_seconds": 11.565
+      },
+      {
+        "file": "1003119935936341070.wav",
+        "sha256": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+        "language": "English",
+        "device": "cpu",
+        "profile": "smart",
+        "metric": "WER",
+        "errors": 1,
+        "reference_units": 19,
+        "error_rate": 0.05263157894736842,
+        "wall_seconds": 5.355
+      }
+    ],
+    "wall_seconds": 23.078,
+    "peak_rss_mib": 5828.9
+  },
+  "limits": [
+    "The downloaded bundle was hashed but was not installed or launched during this verification.",
+    "CI uses runtime-only isolated state and public audio; it does not exercise live microphone, clipboard or OS permission prompts.",
+    "Two known FLEURS clips are a functional smoke, not representative accuracy certification.",
+    "Direct GitHub Flatpak beta; not a Flathub publication."
+  ]
+}

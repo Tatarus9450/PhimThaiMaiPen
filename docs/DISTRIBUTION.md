@@ -1,12 +1,14 @@
 # Flatpak beta distribution
 
-Updated 2026-09-12. **Beta 3 is pending CI build, offline ASR and bundle verification before publication.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b3`; intended Git tag `v2.0.0-beta.3`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
+Updated 2026-09-12. **Beta 3 is published after successful CI build, offline ASR and bundle import checks.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b3`; Git tag `v2.0.0-beta.3`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
 
 Beta 3 introduces a generated, text-free [penguin microphone icon](../phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png) and a cobalt, amber and ivory glass interface. Native and Flatpak packages install the 512×512 PNG under the same application ID. The first-launch download, desktop consent flow and CPU default continue unchanged
 
+Public beta 3 verification: all eight published assets downloaded and matched their API sizes and hashes; the 406,518,232-byte bundle passed `SHA256SUMS`. Source tag and build commit are `f4403066500f14fd9959eb5a745be5b2277402df`. See [release evidence](evidence/github-beta3-release.json).
+
 ## Install, update and rollback
 
-After the CI gates pass and beta 3 is published, download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3). Verify with `sha256sum --check --ignore-missing SHA256SUMS`, then open the bundle in Discover or run:
+Download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3). Verify with `sha256sum --check --ignore-missing SHA256SUMS`, then open the bundle in Discover or run:
 
 ```bash
 flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak

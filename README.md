@@ -6,7 +6,7 @@
 
 **Local Thai and English voice typing for Linux** — editable transcripts, selectable models, microphone settings, and offline Thai-to-English translation
 
-กำลังเตรียม **2.0.0 beta 3 — รอ CI ตรวจผ่านก่อนเผยแพร่** รุ่นนี้ใช้ไอคอนเพนกวินถือไมโครโฟนที่สร้างใหม่ ไม่มีตัวอักษรในภาพ และหน้าต่างกระจกโทน **น้ำเงินโคบอลต์ / อำพัน / งาช้าง** การติดตั้งใหม่ใช้ **Qwen3-ASR 0.6B + Smart Mix + Auto → CPU + วางทันที** ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังเป็น Beta และรองรับเป็นรายโมเดลกับอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
+เผยแพร่ **2.0.0 beta 3** แล้ว รุ่นนี้ใช้ไอคอนเพนกวินถือไมโครโฟนที่สร้างใหม่ ไม่มีตัวอักษรในภาพ และหน้าต่างกระจกโทน **น้ำเงินโคบอลต์ / อำพัน / งาช้าง** การติดตั้งใหม่ใช้ **Qwen3-ASR 0.6B + Smart Mix + Auto → CPU + วางทันที** ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังเป็น Beta และรองรับเป็นรายโมเดลกับอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
 
 ![Transcript editor](docs/screenshots/transcript.png)
 
@@ -14,7 +14,7 @@
 
 ### Flatpak · แนะนำสำหรับผู้ใช้ทั่วไป
 
-เมื่อ CI ตรวจผ่านและเผยแพร่แล้ว ดาวน์โหลด `PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak` และ `SHA256SUMS` จาก [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3) แล้วเปิดไฟล์ด้วย **Discover** เพื่อติดตั้ง หรือใช้คำสั่ง:
+ดาวน์โหลด `PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak` และ `SHA256SUMS` จาก [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3) แล้วเปิดไฟล์ด้วย **Discover** เพื่อติดตั้ง หรือใช้คำสั่ง:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
