@@ -24,6 +24,7 @@ class ModelSpec:
     kind: str = "asr"
     status: str = "experimental"
     files: tuple = ()
+    origin: str = "catalog"
 
 
 CATALOG = {
@@ -46,6 +47,14 @@ CATALOG = {
                            files=("ggml-large-v3-turbo-q5_0.bin",), status="Experimental; requires packaged whisper.cpp runtime"),
 }
 VERIFIED = {}
+BUILTIN_CATALOG = dict(CATALOG)
+
+
+def refresh_catalog():
+    from .external_models import load_specs
+    CATALOG.clear()
+    CATALOG.update(BUILTIN_CATALOG)
+    CATALOG.update(load_specs())
 
 
 def digest(path, algorithm="sha256", git_blob=False):
@@ -137,6 +146,8 @@ def installed_size(model_id):
 def download(model_id, progress=lambda event: None):
     from huggingface_hub import HfApi, hf_hub_download
     spec = CATALOG[model_id]
+    if spec.origin == "local":
+        raise ValueError("โมเดลนำเข้าเองไม่มีแหล่งดาวน์โหลดอัตโนมัติ ให้นำเข้าจากโฟลเดอร์ต้นฉบับอีกครั้ง")
     target = model_dir(model_id)
     target.mkdir(parents=True, exist_ok=True)
     info = HfApi().model_info(spec.repo, revision=spec.revision, files_metadata=True)
@@ -176,16 +187,25 @@ def remove(model_id):
     target = model_dir(model_id)
     if target.exists():
         shutil.rmtree(target)
+    if model_id.startswith("local-"):
+        CATALOG.pop(model_id, None)
 
 
 def main():
     import sys
     try:
-        download(sys.argv[1], lambda e: print(json.dumps(e), flush=True))
+        progress = lambda e: print(json.dumps(e), flush=True)
+        if sys.argv[1] == "--import":
+            from .external_models import import_folder
+            import_folder(sys.argv[2], progress)
+        else:
+            download(sys.argv[1], progress)
     except Exception as exc:
         print(json.dumps({"error": str(exc)}), flush=True)
         raise SystemExit(1)
 
+
+refresh_catalog()
 
 if __name__ == "__main__":
     main()

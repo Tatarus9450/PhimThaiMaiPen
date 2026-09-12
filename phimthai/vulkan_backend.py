@@ -147,15 +147,12 @@ def request_transcription(path, settings):
 
 def transcribe(path, model_directory, settings):
     from .models import CATALOG
-    from .performance import choose
     import typhoon_service as service
     if settings.device == "npu":
         raise RuntimeError("This model uses CPU or Vulkan GPU; select the AMD NPU model for NPU use")
-    devices = gpu_devices() if settings.device != "cpu" else []
+    devices = gpu_devices() if settings.device == "gpu" else []
     selected = "vulkan" if settings.device == "gpu" and devices else "cpu"
     warning = "Compatible hardware GPU unavailable; using CPU" if settings.device == "gpu" and not devices else ""
-    if settings.device == "auto":
-        selected, warning = choose(settings.model, ["cpu", "vulkan"] if devices else ["cpu"], settings.preference)
     model = model_directory / CATALOG[settings.model].files[0]
     gpu = devices[0] if selected == "vulkan" else None
     load_started = time.perf_counter()

@@ -178,6 +178,11 @@ def main():
             report["defaults"] = {key: getattr(defaults, key) for key in ("model", "device", "profile", "language")}
             require(report["defaults"] == {"model": "qwen-0.6b", "device": "auto", "profile": "smart", "language": "auto"},
                     "Qwen 0.6B / Auto / Smart Mix defaults changed")
+            report["first_launch"] = {key: getattr(defaults, key) for key in
+                                      ("model_setup", "desktop_setup_done", "remember_desktop", "paste_mode")}
+            require(report["first_launch"] == {"model_setup": "pending", "desktop_setup_done": False,
+                                               "remember_desktop": True, "paste_mode": "immediate"},
+                    "First-launch download/desktop defaults are incorrect")
             report["source"] = check_packaged_source(package)
             report["dependencies"] = check_dependency_metadata()
             require(not report["dependencies"]["failures"], "Installed dependency metadata is inconsistent")

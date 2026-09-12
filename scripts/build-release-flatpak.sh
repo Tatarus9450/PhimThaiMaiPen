@@ -185,6 +185,10 @@ from phimthai.feedback import DictationFeedback
 import phimthai.app
 settings = Settings()
 assert settings.model == "qwen-0.6b" and settings.profile == "smart"
+assert settings.model_setup == "pending" and not settings.desktop_setup_done
+assert settings.remember_desktop and settings.paste_mode == "immediate"
+from phimthai.devices import select_device
+assert select_device("auto", torch) == ("cpu", "")
 assert torch.__version__ == "2.11.0+cpu" and torch.version.cuda is None
 assert PySide6.__version__ == "6.11.1"
 assets = pathlib.Path(phimthai.app.__file__).parent / "assets"

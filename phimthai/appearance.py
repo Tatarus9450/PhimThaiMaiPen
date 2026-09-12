@@ -292,6 +292,8 @@ QLabel#shortcut { color: #c6ddd9; background: rgba(128, 194, 186, 20);
 QLabel#status { color: #d6e9ee; background: rgba(111, 169, 189, 16);
     border: 1px solid rgba(145, 194, 211, 28); border-radius: 13px; padding: 10px 12px; }
 QLabel#recording { color: #ffccc5; }
+QLabel#betaWarning { color: #ff9b9b; background: rgba(130, 24, 38, 38);
+    border: 1px solid rgba(255, 130, 140, 85); border-radius: 10px; padding: 9px 11px; }
 QListWidget { background: #142638; border: 1px solid #40576a;
     border-radius: 14px; padding: 5px; outline: none; }
 QListWidget::item { color: #c4d5e2; padding: 10px 12px; border-radius: 10px; }

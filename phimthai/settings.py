@@ -22,12 +22,14 @@ class Settings:
     language: str = "auto"
     profile: str = "smart"
     microphone: str = ""
-    paste_mode: str = "review"
+    paste_mode: str = "immediate"
     preference: str = "speed"
     keep_history: bool = False
     keep_audio_history: bool = False
-    remember_desktop: bool = False
+    remember_desktop: bool = True
     onboarding_done: bool = False
+    model_setup: str = "pending"
+    desktop_setup_done: bool = False
     hotkey: str = "Meta+H"
     reduced_transparency: bool = False
     sound_feedback: bool = True
@@ -45,7 +47,8 @@ class Settings:
                 raise ValueError(f"Invalid type for {key}")
         choices = {"device": {"auto", "cpu", "gpu", "npu"}, "language": {"auto", "Thai", "English"},
                    "profile": {"raw", "smart", "th_to_eng"}, "paste_mode": {"review", "immediate"},
-                   "preference": {"speed", "power"}}
+                   "preference": {"speed", "power"},
+                   "model_setup": {"pending", "downloading", "paused", "complete", "skipped"}}
         for key, allowed in choices.items():
             if getattr(self, key) not in allowed:
                 raise ValueError(f"Invalid {key}: {getattr(self, key)}")
@@ -61,6 +64,12 @@ def load_settings() -> Settings:
     values = json.loads(path.read_text(encoding="utf-8"))
     if values.get("version", 2) != 2:
         raise ValueError("Settings were written by an unsupported application version")
+    # An upgrade is not a new installation. Never download a model the user
+    # removed, change paste behavior, or re-prompt for desktop permissions.
+    values.setdefault("model_setup", "skipped")
+    values.setdefault("desktop_setup_done", True)
+    values.setdefault("remember_desktop", False)
+    values.setdefault("paste_mode", "review")
     return Settings(**{k: v for k, v in values.items() if k in Settings.__dataclass_fields__}).validate()
 
 

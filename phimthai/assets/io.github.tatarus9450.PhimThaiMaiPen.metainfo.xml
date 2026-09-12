@@ -11,14 +11,14 @@
     <name>PhimThaiMaiPen contributors</name>
   </developer>
   <description>
-    <p>Turn Thai and English speech into editable text on your Linux desktop. Choose a local speech model, record with your microphone or open an audio file, and review the result before pasting it.</p>
-    <p>Models are downloaded separately. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
-    <p>Qwen3-ASR 0.6B with Smart Mix is selected by default for Thai and English dictation. Other models remain available in the model manager.</p>
+    <p>Turn Thai and English speech into editable text on your Linux desktop. Record with your microphone or open an audio file, then paste automatically after granting desktop permission, or review and copy the result.</p>
+    <p>On the first launch of a new installation, the app downloads Qwen3-ASR 0.6B separately, approximately 1.89 GB. Pause and resume the download in the app. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
+    <p>New installations use Qwen3-ASR 0.6B with Smart Mix, automatic CPU selection and immediate paste. The app prepares recording and mode shortcuts and requests desktop consent for keyboard access. Existing user settings are preserved.</p>
     <ul>
       <li>Edit, copy, retry, and translate Thai text into English</li>
       <li>Select your microphone and test its input level</li>
-      <li>Download, verify, switch, and remove speech models</li>
-      <li>Inspect processing devices and compatibility information</li>
+      <li>Download, verify, switch, remove, and import supported speech model folders</li>
+      <li>Inspect processing devices and compatibility information; GPU and NPU remain Beta features</li>
     </ul>
   </description>
   <launchable type="desktop-id">io.github.tatarus9450.PhimThaiMaiPen.desktop</launchable>
@@ -27,6 +27,9 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0~beta2" date="2026-09-12" type="development">
+      <description><p>Automatic first-launch Qwen model download with pause and resume, shortcut and paste consent setup, immediate paste for new installations, supported external model folder import, and clear GPU/NPU Beta warnings. Existing settings are preserved.</p></description>
+    </release>
     <release version="2.0.0~beta1" date="2026-09-12" type="development">
       <description><p>First downloadable Flatpak preview with Qwen3-ASR 0.6B as the default, Liquid Glass UI, a small left-side dictation popup, sound feedback, and Thai keyboard paste support.</p></description>
     </release>

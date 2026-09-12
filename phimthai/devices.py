@@ -32,8 +32,8 @@ def select_device(requested, torch, model="qwen-0.6b", preference="speed"):
     if requested == "npu":
         raise RuntimeError("This model has no verified NPU backend. Choose Auto or CPU. Detected NPU hardware alone is not sufficient.")
     if requested == "auto":
-        from .performance import choose
-        return choose(model, ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"], preference)
+        # Accelerators are opt-in Beta, including when old measurements exist.
+        return "cpu", ""
     if requested == "gpu" and torch.cuda.is_available():
         return "cuda", ""
     if requested == "gpu":

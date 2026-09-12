@@ -10,7 +10,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 
 from PySide6.QtCore import QLockFile, QProcess, QTimer, Qt
-from PySide6.QtGui import QAction, QGuiApplication, QIcon
+from PySide6.QtGui import QAction, QBrush, QColor, QGuiApplication, QIcon
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
@@ -24,10 +24,11 @@ from .clipboard import ClipboardTransaction
 from .devices import inventory, openvino_devices
 from .feedback import DictationFeedback
 from .jobs import JobController
-from .models import CATALOG, installed_size, local_model, model_dir, remove
+from .models import CATALOG, installed_size, local_model, model_dir, refresh_catalog, remove
 from .settings import Settings, data_dir, load_settings, save_settings
 
 PROFILE_NAMES = {"smart": "Smart Mix", "raw": "Raw", "th_to_eng": "TH → ENG"}
+BETA_WARNING = "GPU / NPU · Beta\nฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน\nแนะนำให้ใช้ CPU สำหรับการถอดเสียงทั่วไป"
 
 
 def button(text, callback, primary=False):
@@ -42,6 +43,7 @@ def button(text, callback, primary=False):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        refresh_catalog()
         self.settings_error = ""
         try:
             self.settings = load_settings()
@@ -58,6 +60,16 @@ class MainWindow(QMainWindow):
         self.download_process = None
         self.downloading_model = None
         self.download_buffer = b""
+        self.download_cancelled = False
+        self.download_failure = ""
+        self.importing = False
+        self.imported_model = None
+        self.model_process_pid = 0
+        self.startup_started = False
+        self.startup_action = ""
+        self.desktop_queue = []
+        self.desktop_starting = False
+        self.desktop_setup_active = False
         self.portal_buffer = b""
         self.paste_enabled = False
         self.portal_permission_pending = False
@@ -107,8 +119,114 @@ class MainWindow(QMainWindow):
             self.set_status("เลือกและดาวน์โหลดโมเดลก่อนเริ่มพูด")
         else:
             self.set_status("พร้อมแล้ว กดเริ่มพูด เมื่อพูดจบให้กดอีกครั้ง")
+
+    def start_first_run(self):
+        """Called only by the interactive entry point, never by construction."""
+        if self.startup_started or self.quitting or self.settings_error:
+            return
+        self.startup_started = True
+        if self.startup_action and local_model(self.settings.model) is None:
+            # A first-ever hotkey launch opens setup, never starts listening
+            # unexpectedly several minutes later when a download completes.
+            self.startup_action = ""
+            self.showNormal()
+        if self.settings.model_setup in {"pending", "downloading"}:
+            if local_model(self.settings.model) is not None:
+                self.save_setup(model_setup="complete")
+            elif self.settings.model == "qwen-0.6b":
+                if self.save_setup(model_setup="downloading"):
+                    self.download_model(model_id="qwen-0.6b")
+        self.desktop_starting = True
+        self.continue_desktop_setup()
+
+    def save_setup(self, **changes):
+        try:
+            updated = replace(self.settings, **changes)
+            save_settings(updated)
+            self.settings = updated
+            return True
+        except (OSError, ValueError) as exc:
+            self.set_status(f"บันทึกการเริ่มต้นไม่สำเร็จ: {exc}")
+            return False
+
+    def continue_desktop_setup(self):
+        if self.quitting or self.settings_error or not self.desktop_starting:
+            return
+        if self.shortcut_process is not None or self.portal_permission_pending:
+            return
+        self.desktop_starting = False
+        fresh = not self.settings.desktop_setup_done
+        self.desktop_setup_active = fresh
+        native_ready = self.kde_shortcut_state.get("active") and self.kde_shortcut_state.get("mode_active")
         if self.settings.remember_desktop:
-            QTimer.singleShot(0, lambda: self.portal_command("restore"))
+            self.desktop_queue.append(("restore", {"skip_shortcuts": bool(native_ready)}))
+        if fresh:
+            if not native_ready:
+                self.desktop_queue.append(("shortcuts", {}))
+            self.desktop_queue.append(("enable_paste", {}))
+        self.next_desktop_request()
+
+    def next_desktop_request(self):
+        if self.quitting or self.portal_permission_pending or self.shortcut_process is not None:
+            return
+        while self.desktop_queue:
+            action, options = self.desktop_queue.pop(0)
+            if action == "shortcuts":
+                if self.portal_shortcut or self.portal_mode_shortcut:
+                    # Do not launch ConfigureShortcuts during automatic setup.
+                    # Partial bindings remain visible for the user to repair.
+                    continue
+                self.enable_shortcut()
+            elif action == "enable_paste":
+                if self.paste_enabled:
+                    continue
+                self.portal_command(action, persist=self.settings.remember_desktop)
+            else:
+                self.portal_command(action, **options)
+            return
+        if self.desktop_setup_active:
+            self.save_setup(desktop_setup_done=True)
+            self.desktop_setup_active = False
+        self.update_setup_view()
+        if self.startup_action:
+            action, self.startup_action = self.startup_action, ""
+            self.toggle_record() if action == "toggle" else self.cycle_profile()
+
+    def update_setup_view(self):
+        if not hasattr(self, "setup_message"):
+            return
+        ready = local_model(self.settings.model) is not None
+        if self.download_process and (self.downloading_model == self.settings.model or self.importing):
+            self.setup_message.setText(self.download_status.text())
+            self.setup_progress.setRange(self.download_progress.minimum(), self.download_progress.maximum())
+            self.setup_progress.setValue(self.download_progress.value())
+        elif not ready:
+            self.setup_message.setText("ยังไม่มีโมเดลพร้อมใช้ · โหลดต่อ หรือเลือกนำเข้าโมเดลในหน้าโมเดล")
+            self.setup_progress.setRange(0, 100)
+            self.setup_progress.setValue(0)
+        else:
+            self.setup_message.setText("โมเดลพร้อมแล้ว · Meta+H เริ่ม/หยุดพูด · Meta+Shift+H สลับโหมด")
+            self.setup_progress.setRange(0, 100)
+            self.setup_progress.setValue(100)
+        if self.download_failure:
+            self.setup_message.setText(self.download_status.text())
+        self.setup_stop.setVisible(bool(self.download_process))
+        self.setup_resume.setVisible(not ready and not self.download_process)
+        self.setup_progress.setVisible(not ready or bool(self.download_process))
+        shortcut_ready = bool((self.kde_shortcut_state.get("active") and self.kde_shortcut_state.get("mode_active"))
+                              or (self.portal_shortcut and self.portal_mode_shortcut))
+        self.onboarding.setVisible(not ready or not shortcut_ready or not self.paste_enabled or bool(self.download_process))
+        if self.portal_permission_pending or self.shortcut_installing:
+            self.setup_desktop.setText("กำลังเตรียมปุ่มลัด/การวางข้อความ · หากระบบแสดงหน้าขอสิทธิ์ ให้กดอนุญาต")
+        elif shortcut_ready and self.paste_enabled:
+            self.setup_desktop.setText("ปุ่มลัดและการวางข้อความพร้อมแล้ว")
+        else:
+            missing = []
+            if not shortcut_ready:
+                missing.append("ปุ่มลัดยังไม่ครบ")
+            if not self.paste_enabled:
+                missing.append("ยังไม่ได้อนุญาตวางข้อความ")
+            self.setup_desktop.setText(" · ".join(missing) + " · เปิดใช้ได้ในหน้าตั้งค่า")
 
     def build_ui(self):
         root = GlassCanvas()
@@ -192,12 +310,28 @@ class MainWindow(QMainWindow):
     def build_transcript(self):
         layout = self.page("พูดให้เป็นข้อความ", "ไทย อังกฤษ หรือพูดสลับภาษา · แก้ข้อความได้ก่อนวาง")
         self.onboarding = QWidget()
-        first_run = QHBoxLayout(self.onboarding)
+        first_run = QVBoxLayout(self.onboarding)
         first_run.setContentsMargins(0, 0, 0, 0)
-        first_run.addWidget(QLabel("เตรียมก่อนเริ่ม"))
-        first_run.addStretch()
-        first_run.addWidget(button("เลือกโมเดล", lambda: self.nav.setCurrentRow(1)))
-        first_run.addWidget(button("ทดสอบไมค์", self.test_mic))
+        self.setup_message = QLabel("เริ่มต้นครั้งแรก · ระบบจะดาวน์โหลด Qwen3-ASR 0.6B ประมาณ 1.89 GB ให้อัตโนมัติ\nดาวน์โหลดเสร็จแล้วใช้แบบออฟไลน์ได้ ภายหลังลบหรือเปลี่ยนโมเดลได้ในหน้าโมเดล")
+        self.setup_message.setWordWrap(True)
+        first_run.addWidget(self.setup_message)
+        self.setup_progress = QProgressBar()
+        self.setup_progress.setValue(0)
+        self.setup_progress.setAccessibleName("ความคืบหน้าการเตรียมโมเดล")
+        first_run.addWidget(self.setup_progress)
+        self.setup_desktop = QLabel("ระบบจะเตรียม Meta+H และ Meta+Shift+H ให้ · อนุญาตสิทธิ์เมื่อเดสก์ท็อปถาม")
+        self.setup_desktop.setWordWrap(True)
+        first_run.addWidget(self.setup_desktop)
+        first_actions = QHBoxLayout()
+        self.setup_resume = button("โหลดโมเดลต่อ", lambda: self.download_model(model_id=self.settings.model))
+        self.setup_stop = button("หยุดดาวน์โหลด", self.cancel_download)
+        first_actions.addWidget(self.setup_resume)
+        first_actions.addWidget(self.setup_stop)
+        first_actions.addWidget(button("จัดการโมเดล", lambda: self.nav.setCurrentRow(1)))
+        first_actions.addWidget(button("ตั้งค่าสิทธิ์", lambda: self.nav.setCurrentRow(2)))
+        first_run.addLayout(first_actions)
+        self.setup_resume.hide()
+        self.setup_stop.hide()
         self.onboarding.setVisible(local_model(self.settings.model) is None)
         layout.addWidget(self.onboarding)
         row = QHBoxLayout()
@@ -245,14 +379,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.model_list)
         self.model_description = QLabel()
         self.model_description.setWordWrap(True)
+        self.model_description.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.model_description)
+        self.model_beta_warning = QLabel(BETA_WARNING)
+        self.model_beta_warning.setObjectName("betaWarning")
+        self.model_beta_warning.setWordWrap(True)
+        layout.addWidget(self.model_beta_warning)
         actions = QHBoxLayout()
-        actions.addWidget(button("ดาวน์โหลด / ซ่อมไฟล์", self.download_model, True))
+        self.download_button = button("ดาวน์โหลด / ซ่อมไฟล์", self.download_model, True)
+        actions.addWidget(self.download_button)
         actions.addWidget(button("หยุดโหลด", self.cancel_download))
         actions.addStretch()
         actions.addWidget(button("เลือกใช้", self.use_model))
         actions.addWidget(button("ลบโมเดล", self.remove_model))
         layout.addLayout(actions)
+        self.import_button = button("นำเข้าโมเดลจากโฟลเดอร์…", self.import_model)
+        layout.addWidget(self.import_button)
         self.download_progress = QProgressBar()
         self.download_progress.setValue(0)
         layout.addWidget(self.download_progress)
@@ -283,10 +425,16 @@ class MainWindow(QMainWindow):
         form.addRow("รูปแบบข้อความ", self.profile)
         self.language = self.combo([("อัตโนมัติ · ไทย + English", "auto"), ("ภาษาไทย", "Thai"), ("English", "English")], self.settings.language)
         form.addRow("ภาษาที่พูด", self.language)
-        self.device = self.combo([("Automatic", "auto"), ("CPU", "cpu"), ("GPU (compatible CUDA)", "gpu"), ("NPU (check compatibility)", "npu")], self.settings.device)
+        self.device = self.combo([("อัตโนมัติ · CPU แนะนำ", "auto"), ("CPU · แนะนำ", "cpu"), ("GPU · Beta", "gpu"), ("NPU · Beta", "npu")], self.settings.device)
         form.addRow("ประมวลผลด้วย", self.device)
+        for value in ("gpu", "npu"):
+            self.device.setItemData(self.device.findData(value), QBrush(QColor("#ff9b9b")), Qt.ItemDataRole.ForegroundRole)
+        self.beta_warning = QLabel(BETA_WARNING)
+        self.beta_warning.setWordWrap(True)
+        self.beta_warning.setObjectName("betaWarning")
+        form.addRow(self.beta_warning)
         self.preference = self.combo([("ตอบสนองเร็ว", "speed"), ("ประหยัดพลังงาน · ต้องมีผลวัด", "power")], self.settings.preference)
-        form.addRow("โหมดอัตโนมัติเน้น", self.preference)
+        self.preference.hide()  # Auto remains on CPU until accelerators leave Beta.
         self.threads = QSpinBox()
         self.threads.setRange(1, os.cpu_count() or 1)
         self.threads.setValue(self.settings.cpu_threads)
@@ -421,6 +569,7 @@ class MainWindow(QMainWindow):
         self.mode_shortcut_hint.setText(mode_trigger)
         if mode_trigger:
             self.shortcut_status.setText(self.shortcut_status.text() + f"\n{mode_trigger} · สลับโหมด")
+        self.update_setup_view()
 
     def cycle_profile(self):
         profiles = list(PROFILE_NAMES)
@@ -471,6 +620,10 @@ class MainWindow(QMainWindow):
             process.deleteLater()
             if self.quitting:
                 QTimer.singleShot(0, self.quit)
+            elif self.desktop_starting:
+                self.continue_desktop_setup()
+            else:
+                self.next_desktop_request()
         process.finished.connect(finished)
         process.errorOccurred.connect(lambda error: finished() if error == QProcess.ProcessError.FailedToStart else None)
         args = ["-m", "phimthai.kde", "--status"] if trigger is None else ["-m", "phimthai.kde", "--install", trigger]
@@ -502,9 +655,9 @@ class MainWindow(QMainWindow):
         try:
             self.record_settings = self.current_settings()
             if not self.test_microphone and self.downloading_model == self.record_settings.model:
-                raise RuntimeError("Wait for the selected model download or repair to finish")
+                raise RuntimeError("กำลังเตรียมโมเดล รอให้ดาวน์โหลดเสร็จก่อน แล้วกด Meta+H เพื่อเริ่มพูด")
             if not self.test_microphone and local_model(self.record_settings.model) is None:
-                raise RuntimeError("Download a model in Models before recording")
+                raise RuntimeError("ยังไม่มีโมเดลพร้อมใช้ กดโหลดโมเดลต่อ หรือนำเข้าโมเดลในหน้าโมเดล")
             self.audio_path = Path(self.temp.name) / (uuid.uuid4().hex + ".wav")
             self.recorder.start(self.audio_path, self.record_settings.microphone)
             self.recording = True
@@ -753,6 +906,7 @@ class MainWindow(QMainWindow):
             self.clipboard.restore()
             self.paste_busy = False
             self.portal_permission_pending = True
+            self.update_setup_view()
         if action == "paste":
             self.paste_inflight = self.paste_request_id
             self.paste_committed = True
@@ -805,12 +959,15 @@ class MainWindow(QMainWindow):
                 self.set_status("Global shortcut: " + response.get("trigger", "Configured by desktop"))
             elif event == "shortcuts_disabled":
                 self.portal_shortcut = ""
-                self.portal_mode_shortcut = ""
                 self.refresh_shortcut_status()
                 self.set_status("No active global shortcut. Enable or configure one in Settings.")
             elif event == "paste_disabled":
                 self.paste_enabled = False
             elif event == "error":
+                self.desktop_queue.clear()
+                if self.desktop_setup_active and not self.quitting:
+                    self.save_setup(desktop_setup_done=True)
+                    self.desktop_setup_active = False
                 if response.get("action") == "paste":
                     request_id = response.get("request_id")
                     if not request_id or request_id != self.paste_inflight:
@@ -827,8 +984,14 @@ class MainWindow(QMainWindow):
                 self.set_status(response["error"])
             elif event == "command_finished":
                 self.portal_permission_pending = False
+                self.next_desktop_request()
+            self.update_setup_view()
 
     def portal_finished(self):
+        self.desktop_queue.clear()
+        if self.startup_action:
+            self.startup_action = ""
+            self.showNormal()
         self.paste_enabled = False
         self.paste_inflight = None
         self.portal_permission_pending = False
@@ -849,7 +1012,7 @@ class MainWindow(QMainWindow):
 
     def selected_model(self):
         index = self.model_list.currentRow()
-        return list(CATALOG)[max(0, index)]
+        return list(CATALOG)[min(max(0, index), len(CATALOG) - 1)]
 
     def refresh_models(self):
         current = self.model_list.currentRow()
@@ -859,7 +1022,7 @@ class MainWindow(QMainWindow):
             size_text = f"{size / 1e9:.2f} GB" if size >= 1e9 else f"{size / 1e6:.0f} MB"
             status = f"Available · {size_text}" if size else "Not downloaded"
             self.model_list.addItem(f"{spec.name}\n{status}" + (" · Selected" if key == self.settings.model else ""))
-        self.model_list.setCurrentRow(max(0, current))
+        self.model_list.setCurrentRow(min(max(0, current), len(CATALOG) - 1))
 
     def model_details(self, _index):
         spec = CATALOG[self.selected_model()]
@@ -867,11 +1030,13 @@ class MainWindow(QMainWindow):
         rates = measurements().get(spec.id, {})
         formats = {"qwen": "SafeTensors", "openvino": "OpenVINO IR · INT8", "fastflowlm": "Q4NX", "marian": "PyTorch + SentencePiece", "vulkan": "GGML · Q5"}
         self.model_description.setText(f"{spec.repo}\n{', '.join(spec.languages)} · {spec.license}\nDownload: ~{spec.download_gb:.2f} GB · Estimated memory: {spec.memory_gb} GB\nBackend: {spec.backend} · Devices: {' / '.join(spec.devices)}\nFormat: {formats[spec.backend]}\nStatus: {spec.status}\nRevision: {spec.revision[:12]}\nMeasured seconds per audio second: {rates or 'No measurements yet'}")
+        self.download_button.setEnabled(spec.origin != "local")
+        self.model_beta_warning.setVisible(any(device in spec.devices for device in ("gpu", "npu")))
 
     def refresh_device_choices(self):
         spec = CATALOG[self.settings.model]
         labels = {"openvino": "Intel GPU (OpenVINO)", "vulkan": "Hardware GPU (Vulkan)"}
-        self.device.setItemText(self.device.findData("gpu"), labels.get(spec.backend, "GPU (compatible CUDA)"))
+        self.device.setItemText(self.device.findData("gpu"), labels.get(spec.backend, "GPU (CUDA)") + " · Beta")
         from .fastflowlm_backend import available
         enabled = (spec.backend == "openvino" and "NPU" in openvino_devices()) or (spec.backend == "fastflowlm" and available())
         item = self.device.model().item(self.device.findData("npu"))
@@ -880,25 +1045,59 @@ class MainWindow(QMainWindow):
         if not enabled and self.device.currentData() == "npu":
             self.device.setCurrentIndex(self.device.findData("auto"))
 
-    def download_model(self):
+    def download_model(self, _checked=False, *, model_id=None):
         if self.download_process:
             return
-        model_id = self.selected_model()
+        model_id = model_id or self.selected_model()
+        if CATALOG[model_id].origin == "local":
+            self.download_status.setText("โมเดลภายนอก: ใช้ปุ่มนำเข้าโมเดลจากโฟลเดอร์เพื่อนำเข้าอีกครั้ง")
+            return
         if model_id in {self.settings.model, "translate-th-en"}:
             if self.recording or self.jobs.busy:
                 self.download_status.setText("Finish the current job before repairing its model")
                 return
             self.jobs.stop_worker()
+        self.importing = False
+        if model_id == "qwen-0.6b" and self.settings.model_setup in {"pending", "paused", "downloading"}:
+            if not self.save_setup(model_setup="downloading"):
+                return
         self.downloading_model = model_id
+        self.start_model_process(["-m", "phimthai.models", model_id])
+        self.download_status.setText(f"กำลังดาวน์โหลด {CATALOG[model_id].name} ประมาณ {CATALOG[model_id].download_gb:.2f} GB\nเริ่มต้นครั้งแรก ใช้เวลาตามความเร็วอินเทอร์เน็ต · ภายหลังลบหรือเปลี่ยนโมเดลได้")
+        self.update_setup_view()
+
+    def import_model(self):
+        if self.download_process or self.recording or self.jobs.busy:
+            self.download_status.setText("รอให้งานและการดาวน์โหลดเสร็จก่อนนำเข้าโมเดล")
+            return
+        folder = QFileDialog.getExistingDirectory(self, "เลือกโฟลเดอร์ Qwen3-ASR หรือ Whisper OpenVINO / GGML Q5")
+        if not folder:
+            return
+        self.importing = True
+        self.imported_model = None
+        self.downloading_model = None
+        self.start_model_process(["-m", "phimthai.models", "--import", folder])
+        self.download_status.setText("กำลังตรวจและคัดลอกโมเดลเข้าพื้นที่แอป · ไฟล์ต้นฉบับจะเก็บไว้เหมือนเดิม")
+        self.update_setup_view()
+
+    def start_model_process(self, arguments):
+        self.download_cancelled = False
+        self.download_failure = ""
+        self.imported_model = None
+        self.model_process_pid = 0
         self.download_process = QProcess(self)
         self.download_buffer = b""
         self.download_process.readyReadStandardOutput.connect(self.download_output)
         self.download_process.readyReadStandardError.connect(lambda: self.download_process.readAllStandardError() if self.download_process else None)
         self.download_process.finished.connect(self.download_finished)
         self.download_process.errorOccurred.connect(self.download_error)
-        self.download_process.start(sys.executable, ["-m", "phimthai.models", model_id])
+        self.download_process.started.connect(self.model_process_started)
+        self.download_process.start(sys.executable, arguments)
         self.download_progress.setRange(0, 0)
-        self.download_status.setText("Downloading model files… You can keep using the app.")
+
+    def model_process_started(self):
+        if self.download_process:
+            self.model_process_pid = self.download_process.processId()
 
     def download_output(self):
         self.download_buffer += bytes(self.download_process.readAllStandardOutput())
@@ -909,29 +1108,66 @@ class MainWindow(QMainWindow):
             except ValueError:
                 continue
             if "error" in event:
+                self.download_failure = event["error"]
                 self.download_status.setText(event["error"])
             else:
                 self.download_progress.setRange(0, 100)
                 self.download_progress.setValue(int(event.get("completed", 0) / max(1, event.get("total", 1)) * 100))
-                self.download_status.setText("Verified and ready" if event.get("done") else "Downloading: " + event.get("file", ""))
+                self.download_status.setText("ตรวจไฟล์ครบ พร้อมใช้งาน" if event.get("done") else
+                    ("กำลังนำเข้า: " if event.get("importing") else "กำลังดาวน์โหลด: ") + event.get("file", "") +
+                    f" · ตรวจแล้ว {event.get('completed', 0) / 1e6:.0f} / {event.get('total', 0) / 1e6:.0f} MB")
+                if event.get("model_id"):
+                    self.imported_model = event["model_id"]
+            self.update_setup_view()
 
     def download_finished(self, code, _status):
+        if self.download_process is None:
+            return
+        self.download_output()
+        process = self.download_process
+        model_id = self.downloading_model
         self.download_process = None
         self.downloading_model = None
+        process.deleteLater()
         self.download_progress.setRange(0, 100)
         if code:
-            self.download_status.setText("Download stopped. Select Download to resume. " + self.download_status.text())
+            self.download_status.setText("หยุดแล้ว · กดโหลดโมเดลต่อได้ " + self.download_failure)
+        elif self.importing:
+            refresh_catalog()
+            self.jobs.stop_worker()
+            self.download_status.setText("นำเข้าแล้ว · เลือกโมเดลแล้วกดเลือกใช้ ไฟล์ต้นฉบับยังอยู่ครบ")
+        if self.importing:
+            from .external_models import cleanup_interrupted_import
+            try:
+                cleanup_interrupted_import(self.model_process_pid)
+            except OSError as exc:
+                self.download_failure = f"ล้างไฟล์นำเข้าชั่วคราวไม่สำเร็จ: {exc}"
+                self.download_status.setText(self.download_failure)
+        if model_id == "qwen-0.6b" and self.settings.model_setup == "downloading" and (not self.quitting or not code):
+            self.save_setup(model_setup="complete" if not code else "paused")
+        self.importing = False
         self.refresh_models()
+        if self.imported_model in CATALOG:
+            self.model_list.setCurrentRow(list(CATALOG).index(self.imported_model))
+        self.update_setup_view()
 
     def download_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
+            self.download_process.deleteLater()
             self.download_process = None
             self.downloading_model = None
+            if self.settings.model_setup == "downloading":
+                self.save_setup(model_setup="paused")
             self.download_progress.setRange(0, 100)
             self.download_status.setText("Could not start download worker. Select Download to retry.")
+            self.download_failure = self.download_status.text()
+            self.update_setup_view()
 
     def cancel_download(self):
         if self.download_process:
+            self.download_cancelled = True
+            if self.settings.model_setup == "downloading":
+                self.save_setup(model_setup="paused")
             self.download_process.kill()
 
     def use_model(self):
@@ -958,6 +1194,7 @@ class MainWindow(QMainWindow):
         self.jobs.stop_worker()
         self.refresh_models()
         self.refresh_device_choices()
+        self.update_setup_view()
 
     def remove_model(self):
         model_id = self.selected_model()
@@ -969,8 +1206,16 @@ class MainWindow(QMainWindow):
             return
         if QMessageBox.question(self, "Remove model", "Remove downloaded files for this model? You can download them again.") == QMessageBox.StandardButton.Yes:
             self.jobs.stop_worker()
+            if model_id == self.settings.model and CATALOG[model_id].origin == "local":
+                if not self.save_setup(model="qwen-0.6b", device="auto", model_setup="skipped"):
+                    return
+            elif model_id == "qwen-0.6b":
+                if not self.save_setup(model_setup="skipped"):
+                    return
             remove(model_id)
             self.refresh_models()
+            self.refresh_device_choices()
+            self.update_setup_view()
 
     def refresh_diagnostics(self):
         state = inventory()
@@ -1165,8 +1410,7 @@ def main():
         window.show()
     if "--smoke" in sys.argv:
         QTimer.singleShot(1000, window.quit)
-    elif "--toggle" in sys.argv:
-        QTimer.singleShot(0, window.toggle_record)
-    elif "--cycle-mode" in sys.argv:
-        QTimer.singleShot(0, window.cycle_profile)
+    elif QGuiApplication.platformName() not in {"offscreen", "minimal"}:
+        window.startup_action = "toggle" if "--toggle" in sys.argv else "cycle-mode" if "--cycle-mode" in sys.argv else ""
+        QTimer.singleShot(0, window.start_first_run)
     return app.exec()

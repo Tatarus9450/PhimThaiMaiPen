@@ -1,7 +1,8 @@
-"""Desktop portal bridge; permission requests are initiated by explicit UI actions."""
+"""Desktop requests from first-launch setup or controls; the OS owns consent."""
 import asyncio
 import json
 import os
+import re
 import sys
 import tempfile
 import uuid
@@ -48,12 +49,32 @@ def emit(**event):
     print(json.dumps(event), flush=True)
 
 
+def preferred_trigger(trigger):
+    """Translate UI/Qt spelling to the XDG shortcuts specification."""
+    parts = trigger.strip().split("+")
+    aliases = {"CTRL": "CTRL", "CONTROL": "CTRL", "ALT": "ALT", "SHIFT": "SHIFT",
+               "META": "LOGO", "SUPER": "LOGO", "LOGO": "LOGO"}
+    try:
+        modifiers = [aliases[part.upper()] for part in parts[:-1]]
+    except KeyError as exc:
+        raise ValueError("รูปแบบปุ่มลัดไม่รองรับ เช่น Meta+H หรือ Ctrl+Alt+Space") from exc
+    key = parts[-1]
+    key = {"SPACE": "space", "ESC": "Escape", "ESCAPE": "Escape", "RETURN": "Return",
+           "ENTER": "Return", "TAB": "Tab", "BACKSPACE": "BackSpace", "DELETE": "Delete"}.get(key.upper(), key)
+    if len(key) == 1:
+        key = key.lower()
+    if not re.fullmatch(r"[a-zA-Z0-9_]+", key):
+        raise ValueError("รูปแบบปุ่มลัดไม่รองรับ เช่น Meta+H")
+    return "+".join([*modifiers, key])
+
+
 class Portals:
     def __init__(self):
         self.bus = None
         self.responses = {}
         self.shortcuts = None
         self.remote = None
+        self.shortcut_bindings = {}
 
     def message(self, message):
         if message.message_type != MessageType.SIGNAL:
@@ -70,14 +91,16 @@ class Portals:
                     emit(event="cycle_mode")
         if message.interface == "org.freedesktop.portal.GlobalShortcuts" and message.member == "ShortcutsChanged":
             if self.shortcuts and message.body[0] == self.shortcuts:
-                self.report_shortcuts(message.body[1])
+                self.report_shortcuts(message.body[1], partial=True)
         if message.interface == "org.freedesktop.portal.Session" and message.member == "Closed":
             if message.path == self.remote:
                 self.remote = None
                 emit(event="paste_disabled")
             if message.path == self.shortcuts:
                 self.shortcuts = None
+                self.shortcut_bindings.clear()
                 emit(event="shortcuts_disabled")
+                emit(event="mode_shortcut_enabled", trigger="")
 
     async def connect(self):
         self.bus = await MessageBus().connect()
@@ -135,9 +158,9 @@ class Portals:
         try:
             response = await self.request("GlobalShortcuts", "BindShortcuts", "oa(sa{sv})sa{sv}",
                 [session, [["record", {"description": Variant("s", "Start / stop voice typing"),
-                                             "preferred_trigger": Variant("s", trigger)}],
+                                             "preferred_trigger": Variant("s", preferred_trigger(trigger))}],
                            ["cycle-mode", {"description": Variant("s", "Switch dictation mode"),
-                                           "preferred_trigger": Variant("s", "META+SHIFT+h")}]], "", {}])
+                                           "preferred_trigger": Variant("s", "LOGO+SHIFT+h")}]], "", {}])
             self.shortcuts = session
             self.report_shortcuts(response.get("shortcuts", []))
             if persist:
@@ -149,24 +172,16 @@ class Portals:
             await self.close_session(session)
             raise
 
-    def report_shortcuts(self, shortcuts):
-        found_record = False
+    def report_shortcuts(self, shortcuts, partial=False):
+        if not partial:
+            self.shortcut_bindings.clear()
         for identifier, values in shortcuts:
-            if identifier == "record":
-                found_record = True
+            if identifier in {"record", "cycle-mode"}:
                 description = values.get("trigger_description")
-                trigger = description.value.strip() if description and isinstance(description.value, str) else ""
-                emit(event="shortcuts_enabled", trigger=trigger) if trigger else emit(event="shortcuts_disabled")
-        if not found_record:
-            emit(event="shortcuts_disabled")
-        for identifier, values in shortcuts:
-            if identifier == "cycle-mode":
-                description = values.get("trigger_description")
-                trigger = description.value.strip() if description and isinstance(description.value, str) else ""
-                emit(event="mode_shortcut_enabled", trigger=trigger)
-                break
-        else:
-            emit(event="mode_shortcut_enabled", trigger="")
+                self.shortcut_bindings[identifier] = description.value.strip() if description and isinstance(description.value, str) else ""
+        trigger = self.shortcut_bindings.get("record", "")
+        emit(event="shortcuts_enabled", trigger=trigger) if trigger else emit(event="shortcuts_disabled")
+        emit(event="mode_shortcut_enabled", trigger=self.shortcut_bindings.get("cycle-mode", ""))
 
     async def enable_paste(self, persist=False, token=""):
         previous = self.remote
@@ -206,12 +221,13 @@ class Portals:
                 emit(event="warning", error="Previous paste session could not be closed; it will end when the app exits")
         emit(event="paste_enabled", persistent=persisted)
 
-    async def restore(self):
+    async def restore(self, skip_shortcuts=False):
         state = saved_state()
         for key, value in state.items():
             try:
                 if key == "shortcut":
-                    await self.enable_shortcuts(value, persist=True)
+                    if not skip_shortcuts:
+                        await self.enable_shortcuts(value, persist=True)
                 elif key == "paste_token":
                     await self.enable_paste(persist=True, token=value)
             except Exception as exc:
@@ -269,7 +285,7 @@ async def main():
             elif action == "paste":
                 await portals.paste(request.get("request_id"))
             elif action == "restore":
-                await portals.restore()
+                await portals.restore(skip_shortcuts=request.get("skip_shortcuts", False))
             elif action == "forget":
                 state_path().unlink(missing_ok=True)
         except Exception as exc:

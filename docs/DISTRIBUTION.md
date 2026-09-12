@@ -1,19 +1,23 @@
 # Flatpak beta distribution
 
-Updated 2026-09-12. Delivery now includes a versioned GitHub source release and a downloadable Flatpak beta. Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b1`; Git tag `v2.0.0-beta.1`. This direct-download preview is **not published on Flathub**. Discover can install the downloaded bundle; searching Flathub for the application will not find it yet
+Updated 2026-09-12. **Beta 2 is pending CI build, offline ASR and bundle verification before publication.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b2`; intended Git tag `v2.0.0-beta.2`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
 
 ## Install, update and rollback
 
-Download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.1). Verify with `sha256sum --check SHA256SUMS`, then open the bundle in Discover or run:
+After the CI gates pass and beta 2 is published, download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.2). Verify with `sha256sum --check SHA256SUMS`, then open the bundle in Discover or run:
 
 ```bash
-flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak
+flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.2-x86_64.flatpak
 flatpak run --branch=beta io.github.tatarus9450.PhimThaiMaiPen
 ```
 
-The bundle points to Flathub for the KDE runtime. Runtime dependencies and models download separately. New settings use Qwen3-ASR 0.6B, automatic language/device selection, Smart Mix and review before paste. Qwen's pinned model revision is `5eb144179a02acc5e5ba31e748d22b0cf3e303b0` (~1.89 GB). Allow sufficient RAM for the desktop in addition to the measured 5.3–6 GB ASR peak. Model selection remains available; existing settings are preserved
+The bundle points to Flathub for the KDE runtime. Runtime dependencies and models download separately. New installations use Qwen3-ASR 0.6B, automatic language selection, Smart Mix, Auto processing on CPU and immediate paste after desktop permission is granted. Qwen's pinned model revision is `5eb144179a02acc5e5ba31e748d22b0cf3e303b0` (~1.89 GB). Allow sufficient RAM for the desktop in addition to the historical measured 5.3–6 GB ASR peak. Model selection remains available; upgrades preserve existing model, paste and permission settings
 
-Start the app, download the model, test the microphone and enable shortcuts/paste in Settings. The desktop must grant portal permissions. Meta+H starts/stops recording; Meta+Shift+H cycles modes. Set immediate paste if desired. XWayland is needed for the small left-side popup on Wayland
+On the first interactive launch of a new installation, the app starts downloading Qwen 0.6B and shows progress. Use **หยุดดาวน์โหลด** to pause and **โหลดโมเดลต่อ** to resume. It also prepares Meta+H for recording and Meta+Shift+H for mode switching and requests desktop keyboard permission for paste. The user must respond to the actual desktop consent dialogs; readiness follows granted sessions and active bindings. Test the microphone in Settings when the model is ready. Review-before-paste remains available as a setting. XWayland is needed for the small left-side popup on Wayland
+
+Existing installations are not treated as first launches: upgrades do not change paste mode, redownload a model the user removed, or repeat initial permission setup automatically. Remembered sessions may still be restored and the desktop may ask for consent again. Denied or unsupported permissions leave editing and manual copy available; retry from Settings
+
+The model manager can import folders containing Qwen3-ASR SafeTensors, Whisper OpenVINO, or Whisper Turbo GGML Q5 in the layouts supported by the existing backends. Import copies and verifies model data while preserving the original folder. It does not execute external model code, accept arbitrary architectures, or install missing runtimes. Qwen pickle weights are unsupported; GGML Turbo Q5 still requires the separate whisper.cpp runtime. Models retain their upstream licenses
 
 Quit before installing an updated bundle. To return to an earlier beta bundle, use `flatpak install --user --reinstall ./earlier-version.flatpak`. Model/config data stays under `~/.var/app/io.github.tatarus9450.PhimThaiMaiPen/`; do not use `--delete-data` during rollback. Direct bundles do not provide an application update remote. Native and Flatpak have separate settings; run only one at a time to avoid competing shortcuts
 
@@ -35,13 +39,13 @@ flatpak run org.flatpak.Builder --user --force-clean \
 mkdir -p dist
 flatpak build-bundle --arch=x86_64 \
   --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak \
+  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.2-x86_64.flatpak \
   io.github.tatarus9450.PhimThaiMaiPen beta
 ```
 
 Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Permissions are Wayland, X11 (also under Wayland for the XCB popup), IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
 
-The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
+The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. **Auto stays on CPU in beta 2.** GPU and NPU options show a red **Beta** warning; they remain under development and CPU is recommended for ordinary dictation. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
 
 ## Historical integration evidence
 

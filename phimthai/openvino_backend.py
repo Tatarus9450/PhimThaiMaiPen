@@ -12,13 +12,11 @@ def transcribe(path, model_path, settings):
     import soundfile
     import typhoon_service as service
     from .devices import openvino_devices
-    from .performance import choose
     available = openvino_devices()
     requested = {"cpu": "CPU", "gpu": "GPU", "npu": "NPU"}.get(settings.device)
     warning = ""
     if settings.device == "auto":
-        selected, warning = choose(settings.model, [d.lower() for d in available if d in {"CPU", "GPU"}], settings.preference)
-        requested = selected.upper()
+        requested = "CPU"
     if requested not in available:
         warning = f"{requested} unavailable for OpenVINO; using CPU"
         requested = "CPU"
