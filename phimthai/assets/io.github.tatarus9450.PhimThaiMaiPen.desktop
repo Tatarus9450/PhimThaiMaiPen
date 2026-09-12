@@ -11,9 +11,14 @@ Categories=Utility;Accessibility;
 Keywords=speech;dictation;Thai;voice;transcription;
 StartupNotify=true
 StartupWMClass=PhimThaiMaiPen
-Actions=Record;
+Actions=Record;CycleMode;
 
 [Desktop Action Record]
 Name=Start or stop recording
 Name[th]=เริ่มหรือหยุดบันทึกเสียง
 Exec=phimthai --toggle
+
+[Desktop Action CycleMode]
+Name=Switch dictation mode
+Name[th]=สลับโหมดพิมพ์ด้วยเสียง
+Exec=phimthai --cycle-mode

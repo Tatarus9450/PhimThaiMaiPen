@@ -1,0 +1,130 @@
+{
+  "date_utc": "2026-09-12T03:45:27Z",
+  "scope": "Native KDE persistent Record registration only; no key injection, microphone or recording invocation",
+  "before": {
+    "available": true,
+    "active": false,
+    "trigger": "",
+    "keys": [],
+    "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+    "action": "Record"
+  },
+  "unrelated_config_sha256_before": "0deac7d8d6a989dd3c04497547671877ef9dccb9e9a497d9ceeb990f2c0cd045",
+  "source_sha256": "6679d55933788d06eb5f7cede391059792fb27750e6dca877f922b48aea6e021",
+  "installation": {
+    "available": true,
+    "active": true,
+    "trigger": "Meta+H",
+    "keys": [
+      268435528
+    ],
+    "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+    "action": "Record",
+    "backup": "/home/task/.local/share/phimthai/backups/kde-20260912T034527Z-3031879e",
+    "persistent": true
+  },
+  "after": {
+    "available": true,
+    "active": true,
+    "trigger": "Meta+H",
+    "keys": [
+      268435528
+    ],
+    "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+    "action": "Record"
+  },
+  "unrelated_config_sha256_after": "0deac7d8d6a989dd3c04497547671877ef9dccb9e9a497d9ceeb990f2c0cd045",
+  "unrelated_config_unchanged": true,
+  "legacy_record_desktops_removed": true,
+  "legacy_profile_service_removed": true,
+  "dbus": {
+    "key_owner": [
+      "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+      "Record",
+      "PhimThaiMaiPen",
+      "Start or stop recording"
+    ],
+    "remaining_actions": {
+      "io.github.tatarus9450.PhimThaiMaiPen.desktop": [
+        [
+          "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+          "_launch",
+          "PhimThaiMaiPen",
+          "PhimThaiMaiPen"
+        ],
+        [
+          "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+          "Record",
+          "PhimThaiMaiPen",
+          "Start or stop recording"
+        ]
+      ],
+      "io.github.tatarus9450.PhimThaiMaiPen": [],
+      "linux-voice-typing-record.desktop": [],
+      "linux-voice-typing-profile.desktop": []
+    }
+  },
+  "sources": [
+    "https://github.com/KDE/kmenuedit/blob/master/globalaccel.cpp",
+    "https://github.com/KDE/kglobalaccel/blob/master/src/kglobalaccel_p.h",
+    "https://github.com/KDE/kglobalacceld/blob/master/src/kserviceactioncomponent.cpp",
+    "https://github.com/KDE/kglobalacceld/blob/master/src/globalshortcutsregistry.cpp"
+  ],
+  "limits": [
+    "Actual key press and recording are not invoked in this proof.",
+    "Survived registration process exit; a full desktop logout/login was not performed.",
+    "Desktop action points to installed native launcher --toggle; root owns installed app/IPC verification."
+  ],
+  "two_action_migration": {
+    "date_utc": "2026-09-12T03:54:35Z",
+    "before": {
+      "available": true,
+      "active": true,
+      "trigger": "Meta+H",
+      "keys": [
+        268435528
+      ],
+      "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+      "action": "Record",
+      "mode_active": false,
+      "mode_trigger": "",
+      "mode_keys": []
+    },
+    "other_hash_before": "0deac7d8d6a989dd3c04497547671877ef9dccb9e9a497d9ceeb990f2c0cd045",
+    "source_sha256": "2a08990eadc3580dae8452ff546e4e6896c6c27b8d45483f02afa4c529f3c870",
+    "installation": {
+      "available": true,
+      "active": true,
+      "trigger": "Meta+H",
+      "keys": [
+        268435528
+      ],
+      "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+      "action": "Record",
+      "mode_active": true,
+      "mode_trigger": "Meta+Shift+H",
+      "mode_keys": [
+        301989960
+      ],
+      "backup": "/home/task/.local/share/phimthai/backups/kde-20260912T035435Z-f872b044",
+      "persistent": true
+    },
+    "after": {
+      "available": true,
+      "active": true,
+      "trigger": "Meta+H",
+      "keys": [
+        268435528
+      ],
+      "component": "io.github.tatarus9450.PhimThaiMaiPen.desktop",
+      "action": "Record",
+      "mode_active": true,
+      "mode_trigger": "Meta+Shift+H",
+      "mode_keys": [
+        301989960
+      ]
+    },
+    "other_hash_after": "0deac7d8d6a989dd3c04497547671877ef9dccb9e9a497d9ceeb990f2c0cd045",
+    "unrelated_configuration_unchanged": true
+  }
+}

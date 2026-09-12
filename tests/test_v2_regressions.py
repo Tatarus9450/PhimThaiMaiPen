@@ -171,7 +171,7 @@ class JobSettingsRegressionTests(IsolatedSettingsTest):
             try:
                 # An orphan can briefly remain a zombie until init reaps it.
                 return Path(f"/proc/{child['pid']}/stat").read_text().split(") ", 1)[1][0] == "Z"
-            except FileNotFoundError:
+            except (FileNotFoundError, ProcessLookupError):
                 return True
 
         until(child_stopped)

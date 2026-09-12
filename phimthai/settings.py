@@ -28,7 +28,8 @@ class Settings:
     keep_audio_history: bool = False
     remember_desktop: bool = False
     onboarding_done: bool = False
-    hotkey: str = "CTRL+ALT+SPACE"
+    hotkey: str = "Meta+H"
+    reduced_transparency: bool = False
     cpu_threads: int = field(default_factory=lambda: min(6, os.cpu_count() or 1))
     dictionary: str = ""
     vad: bool = True

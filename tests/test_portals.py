@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
-from dbus_next import Variant
+from dbus_next import Message, Variant
 from phimthai import portals
 
 
@@ -89,7 +89,26 @@ class PortalConsentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shortcut_with_no_binding_is_disabled(self):
         self.client.report_shortcuts([["record", {"trigger_description": Variant("s", "")} ]])
-        self.events.assert_called_once_with(event="shortcuts_disabled")
+        self.events.assert_any_call(event="shortcuts_disabled")
+        self.events.assert_called_with(event="mode_shortcut_enabled", trigger="")
+
+    async def test_mode_shortcut_is_bound_and_routes_only_its_session(self):
+        self.client.request.side_effect = None
+        self.client.request.return_value = {"shortcuts": [
+            ["record", {"trigger_description": Variant("s", "Meta+H")}],
+            ["cycle-mode", {"trigger_description": Variant("s", "Meta+Shift+H")}]]}
+        await self.client.enable_shortcuts("META+h")
+        bindings = self.client.request.call_args.args[3][1]
+        self.assertEqual({entry[0] for entry in bindings}, {"record", "cycle-mode"})
+        self.events.assert_any_call(event="mode_shortcut_enabled", trigger="Meta+Shift+H")
+        self.events.reset_mock()
+        for session in ("/other/session", self.client.shortcuts):
+            self.client.message(Message.new_signal(portals.PATH, "org.freedesktop.portal.GlobalShortcuts",
+                "Activated", "osta{sv}", [session, "cycle-mode", 0, {}]))
+        self.events.assert_called_once_with(event="cycle_mode")
+        self.events.reset_mock()
+        self.client.report_shortcuts([["record", {"trigger_description": Variant("s", "Meta+H")} ]])
+        self.events.assert_called_with(event="mode_shortcut_enabled", trigger="")
 
     async def test_restore_ignores_corrupt_state_and_unknown_fields(self):
         portals.state_path().parent.mkdir(parents=True, exist_ok=True)

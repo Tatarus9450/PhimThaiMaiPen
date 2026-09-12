@@ -68,3 +68,18 @@ No Flathub submission, Discover publication or hardware-wide compatibility certi
 ## Rollback
 
 Stop the new app and workers. Existing legacy environment/model cache remain available. Extract the backup into a separate directory and compare before restoring selected files. Never reset user changes wholesale. Record the Flatpak commit and preserve app data before testing package rollback; downloaded models live outside app updates
+
+
+## 2026-09-12 — Liquid Glass และปุ่มลัด native (2.0.0.dev2)
+
+ผู้ใช้พบว่าหน้าต่าง native ผสมพื้นสว่างกับตัวอักษร/พื้นย่อยจาก KDE Dark จนอ่านยาก และ Meta+H ไม่ทำงาน สาเหตุปุ่มลัดคือ KDE จำ binding ของ portal ไว้ แต่ไม่มี process ที่รับ activation
+
+- เปลี่ยนเป็น native Liquid Glass โทนเข้ม พร้อม palette ครบทุก color group, พื้นย่อยโปร่งใส, ช่องกรอกและข้อความอ่านชัด และตัวเลือกลดความโปร่งใส เอฟเฟกต์วาดจากพื้นหลังภายในแอป ไม่มีการจับภาพหน้าต่างอื่น
+- จัดหน้าต่างใหม่ ลดข้อความไทย–อังกฤษซ้ำบนทุกปุ่ม คงชื่อโหมด Smart Mix / Raw / TH → ENG และแสดงโหมดปัจจุบันในแถบซ้าย
+- KDE native desktop action เรียก `--toggle` ผ่าน Meta+H และ `--cycle-mode` ผ่าน Meta+Shift+H โดยใช้ single-instance IPC แม้ process ที่ตั้งปุ่มลัดปิดไปแล้ว
+- สลับ Smart Mix → Raw → TH → ENG → Smart Mix บันทึกโหมดที่เลือก งานที่กำลังบันทึกยังคง snapshot เดิม
+- ย้ายเฉพาะปุ่มลัดรุ่นเก่าของแอป ตรวจ conflict และสำรองก่อนแก้ หากการตั้งล้มเหลวคืน binding เดิม อัปเดตครั้งถัดไปเก็บปุ่มที่ผู้ใช้ปรับเอง
+- งานติดตั้งปุ่มลัดแยก process เพื่อไม่ขวางปุ่มบันทึกเสียง และรอ transaction จบก่อนออกจากแอป
+- เครื่องทดสอบถอน Flatpak เก่าและ legacy autostart/profile launcher แล้ว โดยเก็บโมเดล ตั้งค่า ประวัติ และ source
+
+หลักฐาน: [KDE registration](evidence/kde-shortcut.json), [KDE → launcher → IPC](evidence/kde-shortcut-route.json), [Native UI](evidence/ui-liquid-glass.json) เส้นทางเริ่ม–หยุดทดสอบด้วย WAV จำลองและหยุดที่ขอบเขตส่งงาน ASR ไม่ใช่การกดแป้นจริงหรือ benchmark โมเดลใหม่ ผล ASR/GPU/NPU เดิมยังเป็นหลักฐานของชุดทดสอบก่อนหน้า

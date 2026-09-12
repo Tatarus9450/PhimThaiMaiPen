@@ -1,0 +1,129 @@
+{
+  "recorded_at_utc": "2026-09-12T03:59:30+00:00",
+  "application_version": "2.0.0.dev2",
+  "status": "passed",
+  "scope": "Owned MainWindow construction and QWidget.grab only; no main/single_instance call or contact with the running user app. Temporary XDG config/data. Recorder and clipboard inert; microphone enumeration, device/runtime inventory, model presence/size, shortcut state and tray simulated. No recording, portal, model inference/download or desktop capture.",
+  "fixture": {
+    "profile": "smart",
+    "record_shortcut": "Meta+H",
+    "mode_shortcut": "Meta+Shift+H",
+    "microphone": "simulated",
+    "models_installed": false
+  },
+  "matrix": {
+    "platform": "wayland",
+    "cases": 32,
+    "issues": 0,
+    "pages": [
+      "transcript",
+      "models",
+      "settings",
+      "diagnostics"
+    ],
+    "system_color_schemes": [
+      "dark",
+      "light"
+    ],
+    "reduced_transparency": [
+      false,
+      true
+    ],
+    "logical_sizes": [
+      [
+        1040,
+        760
+      ],
+      [
+        820,
+        600
+      ]
+    ],
+    "device_pixel_ratios": [
+      1.5
+    ],
+    "all_navigation_items_fully_visible": true,
+    "horizontal_overflow": false,
+    "vertical_page_scrolling_allowed": true
+  },
+  "regressions": {
+    "command": ".venv-app/bin/python -m unittest discover -s tests -p test_appearance.py -v",
+    "tests": 5,
+    "passed": 5,
+    "checks": [
+      "Explicit palette survives post-launch light/dark changes",
+      "Real page/scroll viewport preserves painted glass",
+      "Text contrast measured against brightest painted body interior",
+      "Opaque placeholder palette and actual core glyph contrast",
+      "Reduced transparency renders solid readable surfaces and refreshes cache"
+    ]
+  },
+  "contrast": {
+    "method": "WCAG sRGB relative luminance. Full scan of painted panel interior excluding a 28 logical-pixel rim; placeholder core glyphs compared with exact empty-editor background. Offscreen native Qt render; antialiased glyph edges excluded from the text color criterion.",
+    "minimum_required": 4.5,
+    "minimum_body": 6.498534743970883,
+    "minimum_muted": 4.759188931456308,
+    "minimum_placeholder_core_glyph": 9.525431498629613,
+    "placeholder_alpha": 255
+  },
+  "source_sha256": {
+    "phimthai/app.py": "d936f5412cf4018f966ba1efeb6040e2b68d21a56cfe48d0c3ba4e55f50a3d6b",
+    "phimthai/appearance.py": "d07f568fb9bdc415598df32704eeb31bf99a29a0a66e92b787138905af0a953b",
+    "phimthai/settings.py": "490abd002cbc70b7e6308da4105efe944f3f75c906203deac1ca862dee06124d",
+    "phimthai/__init__.py": "e05ac5f29545a3ea7c1cb5b4a0caac978acc6870bb15a637cb47d311551d0650",
+    "phimthai/assets/glass-chevron-down.svg": "95b96bd2f1dc430309648df28b1eda2bd6a12ad1abd6bb20f28b612c456b08b8",
+    "phimthai/assets/glass-chevron-up.svg": "71008bbfafdc150f930d9997a8d104ccde0a10c0019782ecfd57b1e337fe6cc9",
+    "scripts/check-ui.py": "ca693f76d28fff139076463450cd266258b453f915d7f165c77700f6e23620ca",
+    "tests/test_appearance.py": "908b18d631942cfe61c140a3485b218c10e5ffd4089652a2aefcafcd4c0ad16d"
+  },
+  "screenshots": [
+    {
+      "path": "docs/screenshots/transcript.png",
+      "sha256": "3bcdb755e419728d59b6cacd2477623e93f6ea1bb9c93a7729836ba417bf6405",
+      "logical_size": [
+        1040,
+        760
+      ],
+      "physical_pixels": [
+        1560,
+        1140
+      ]
+    },
+    {
+      "path": "docs/screenshots/models.png",
+      "sha256": "e2a6673a88e0227967afff291284aa0eaff39bf81c85397fe7a32f9e50894df8",
+      "logical_size": [
+        1040,
+        760
+      ],
+      "physical_pixels": [
+        1560,
+        1140
+      ]
+    },
+    {
+      "path": "docs/screenshots/settings.png",
+      "sha256": "4fc968c88ded61898b48566c5d5a8ff47bb261acb87f8d7b6a618db21714aecc",
+      "logical_size": [
+        1040,
+        760
+      ],
+      "physical_pixels": [
+        1560,
+        1140
+      ]
+    },
+    {
+      "path": "docs/screenshots/diagnostics.png",
+      "sha256": "84947ba3d2015e7446171f23ef12db6d60860c7e955aaba79aed075d7b6a917b",
+      "logical_size": [
+        1040,
+        760
+      ],
+      "physical_pixels": [
+        1560,
+        1140
+      ]
+    }
+  ],
+  "reproduce": ".venv-app/bin/python scripts/check-ui.py --backend wayland --output .cache/ui-glass-proof/recheck"
+}

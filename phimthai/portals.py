@@ -63,8 +63,11 @@ class Portals:
             if future and not future.done():
                 future.set_result(message.body)
         if message.interface == "org.freedesktop.portal.GlobalShortcuts" and message.member == "Activated":
-            if self.shortcuts and message.body[0] == self.shortcuts and message.body[1] == "record":
-                emit(event="shortcut")
+            if self.shortcuts and message.body[0] == self.shortcuts:
+                if message.body[1] == "record":
+                    emit(event="shortcut")
+                elif message.body[1] == "cycle-mode":
+                    emit(event="cycle_mode")
         if message.interface == "org.freedesktop.portal.GlobalShortcuts" and message.member == "ShortcutsChanged":
             if self.shortcuts and message.body[0] == self.shortcuts:
                 self.report_shortcuts(message.body[1])
@@ -132,7 +135,9 @@ class Portals:
         try:
             response = await self.request("GlobalShortcuts", "BindShortcuts", "oa(sa{sv})sa{sv}",
                 [session, [["record", {"description": Variant("s", "Start / stop voice typing"),
-                                             "preferred_trigger": Variant("s", trigger)}]], "", {}])
+                                             "preferred_trigger": Variant("s", trigger)}],
+                           ["cycle-mode", {"description": Variant("s", "Switch dictation mode"),
+                                           "preferred_trigger": Variant("s", "META+SHIFT+h")}]], "", {}])
             self.shortcuts = session
             self.report_shortcuts(response.get("shortcuts", []))
             if persist:
@@ -145,13 +150,23 @@ class Portals:
             raise
 
     def report_shortcuts(self, shortcuts):
+        found_record = False
         for identifier, values in shortcuts:
             if identifier == "record":
+                found_record = True
                 description = values.get("trigger_description")
                 trigger = description.value.strip() if description and isinstance(description.value, str) else ""
                 emit(event="shortcuts_enabled", trigger=trigger) if trigger else emit(event="shortcuts_disabled")
-                return
-        emit(event="shortcuts_disabled")
+        if not found_record:
+            emit(event="shortcuts_disabled")
+        for identifier, values in shortcuts:
+            if identifier == "cycle-mode":
+                description = values.get("trigger_description")
+                trigger = description.value.strip() if description and isinstance(description.value, str) else ""
+                emit(event="mode_shortcut_enabled", trigger=trigger)
+                break
+        else:
+            emit(event="mode_shortcut_enabled", trigger="")
 
     async def enable_paste(self, persist=False, token=""):
         previous = self.remote
@@ -233,7 +248,7 @@ async def main():
             request = json.loads(line)
             action = request["action"]
             if action == "shortcuts":
-                await portals.enable_shortcuts(request.get("trigger", "CTRL+ALT+SPACE"), request.get("persist", False))
+                await portals.enable_shortcuts(request.get("trigger", "META+h"), request.get("persist", False))
             elif action == "enable_paste":
                 await portals.enable_paste(request.get("persist", False))
             elif action == "paste":

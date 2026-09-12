@@ -90,6 +90,32 @@ class RetryAndSilenceTests(IsolatedWindow, unittest.TestCase):
         self.assertTrue(latest.exists(), "Keep only the latest recording for Retry")
 
 
+class ModeSwitchTests(IsolatedWindow, unittest.TestCase):
+    def test_default_smart_mix_cycles_all_modes_and_persists(self):
+        from phimthai.settings import load_settings
+        self.assertEqual(self.window.profile.currentData(), "smart")
+        for expected in ("raw", "th_to_eng", "smart"):
+            self.window.cycle_profile()
+            self.assertEqual(self.window.profile.currentData(), expected)
+            self.assertEqual(load_settings().profile, expected)
+
+    def test_switch_during_recording_keeps_current_capture_settings(self):
+        self.window.record_settings = Settings()
+        self.window.recording = True
+        self.window.cycle_profile()
+        self.assertEqual(self.window.record_settings.profile, "smart")
+        self.assertEqual(self.window.current_settings().profile, "raw")
+
+    def test_failed_save_keeps_mode_and_unsaved_form_edits(self):
+        self.window.dictionary.setPlainText("before\tafter")
+        with patch("phimthai.app.save_settings", side_effect=OSError("disk full")):
+            self.window.cycle_profile()
+        self.assertEqual(self.window.profile.currentData(), "smart")
+        self.assertEqual(self.window.settings.profile, "smart")
+        self.assertEqual(self.window.dictionary.toPlainText(), "before\tafter")
+        self.assertIn("disk full", self.window.status.text())
+
+
 class QueuedPasteTests(IsolatedWindow, unittest.IsolatedAsyncioTestCase):
     async def test_saving_opt_out_during_grant_cannot_recreate_restore_token(self):
         requests = queue.Queue()

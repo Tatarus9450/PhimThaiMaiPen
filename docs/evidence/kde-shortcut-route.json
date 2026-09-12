@@ -1,0 +1,142 @@
+{
+  "date_utc": "2026-09-12T03:56:23Z",
+  "scope": "Real KDE service action and installed launcher/IPC; offscreen app with synthetic Recorder and submit spy",
+  "physical_keypress": false,
+  "initial": {
+    "running": false
+  },
+  "states": [
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": false,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "smart",
+      "visible": true
+    },
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": true,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "smart",
+      "visible": true
+    },
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": false,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "smart",
+      "visible": true
+    },
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": false,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "raw",
+      "visible": true
+    },
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": false,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "th_to_eng",
+      "visible": true
+    },
+    {
+      "running": true,
+      "pid": 294777,
+      "version": "2.0.0.dev2",
+      "recording": false,
+      "busy": false,
+      "transcript_characters": 0,
+      "shortcut": "Meta+H",
+      "mode_shortcut": "Meta+Shift+H",
+      "profile": "smart",
+      "visible": true
+    }
+  ],
+  "invocations": 2,
+  "mode_invocations": 3,
+  "launcher": "/home/task/.local/share/phimthai/bin/phimthai",
+  "protected_sha256_before": {
+    "/home/task/.config/phimthai/settings.json": "6bfdafa39a68119c5cb65fa3223b07d5e9b7941b12f74f6399b87720ad422ba9",
+    "/home/task/.local/share/applications/io.github.tatarus9450.PhimThaiMaiPen.desktop": "38413ae1d11868f9d3ad8543b8949bd0aca4c0e90be6f1bda45b807f6c2f212d",
+    "/home/task/.config/kglobalshortcutsrc": "56feaddf5019fa9a832fadb9f469cde903e131a0bbb7bdaccddd070970983cf2"
+  },
+  "child": {
+    "pid": 294777,
+    "qt": "6.11.2",
+    "version": "2.0.0.dev2",
+    "application_module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/app.py",
+    "application_sha256": "d936f5412cf4018f966ba1efeb6040e2b68d21a56cfe48d0c3ba4e55f50a3d6b",
+    "model_gate": "qwen-0.6b",
+    "substitutions": [
+      "Recorder",
+      "JobController.submit",
+      "application.save_settings"
+    ],
+    "events": [
+      "recorder_start",
+      "recorder_stop",
+      "asr_submit_boundary"
+    ],
+    "mode_changes": [
+      "raw",
+      "th_to_eng",
+      "smart"
+    ],
+    "saved_profiles": [
+      "raw",
+      "th_to_eng",
+      "smart"
+    ],
+    "asr_submissions": 1,
+    "physical_microphone_opened": false,
+    "fixture_armed": true,
+    "initial_profile": "smart",
+    "audio_path": "/run/user/1000/phimthai-5ahxn29t/5b92dddfff7c4137b5d48859e0daf2fd.wav",
+    "submission_action": "transcribe",
+    "submitted_audio_is_fixture": true,
+    "final_recording": false,
+    "final_busy": false,
+    "transcript_characters": 0,
+    "worker_pid": 0,
+    "temp_directory": "/run/user/1000/phimthai-5ahxn29t",
+    "shortcut_hint": "Meta+H",
+    "exit_code": 0,
+    "temp_directory_removed": true
+  },
+  "child_log": "qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later\n",
+  "process_exit_code": 0,
+  "protected_sha256_after": {
+    "/home/task/.config/phimthai/settings.json": "6bfdafa39a68119c5cb65fa3223b07d5e9b7941b12f74f6399b87720ad422ba9",
+    "/home/task/.local/share/applications/io.github.tatarus9450.PhimThaiMaiPen.desktop": "38413ae1d11868f9d3ad8543b8949bd0aca4c0e90be6f1bda45b807f6c2f212d",
+    "/home/task/.config/kglobalshortcutsrc": "56feaddf5019fa9a832fadb9f469cde903e131a0bbb7bdaccddd070970983cf2"
+  },
+  "protected_files_unchanged": true,
+  "passed": true
+}

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Install the GUI into a dedicated venv and add a per-user desktop launcher.
 
-No sudo, model download, hotkey migration or system-Python modification.
+No sudo, model download or system-Python modification.
+On KDE, install the persistent Meta+H desktop action and retire owned legacy shortcuts.
 The pinned Qwen source patch excludes optional demo/aligner dependencies.
 """
 import argparse
@@ -92,6 +93,7 @@ def main():
     parser.add_argument("--venv", type=Path, default=ROOT / ".venv-app")
     parser.add_argument("--intel", action="store_true", help="Also install optional OpenVINO runtime")
     parser.add_argument("--no-launcher", action="store_true", help="Install without writing desktop integration")
+    parser.add_argument("--no-shortcut", action="store_true", help="Keep existing KDE shortcut registration")
     args = parser.parse_args()
     if sys.platform != "linux":
         parser.error("This application currently supports Linux")
@@ -119,6 +121,14 @@ def main():
     if not args.no_launcher:
         data_home = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
         launcher, desktop = install_launchers(python, data_home)
+        if not args.no_shortcut and "KDE" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper().split(":"):
+            shortcut = subprocess.run([str(python), "-m", "phimthai.kde", "--ensure", "--launcher", str(launcher)],
+                                      capture_output=True, text=True, timeout=90)
+            print(shortcut.stdout.strip())
+            if shortcut.returncode:
+                print("The app is installed, but KDE shortcut setup failed. Configure it in Settings.", file=sys.stderr)
+                if shortcut.stderr.strip():
+                    print(shortcut.stderr.strip(), file=sys.stderr)
         print(f"Open PhimThaiMaiPen from your application menu. Launcher: {launcher}")
     print(f"Installed. Run: {shlex.quote(str(python))} -m phimthai")
     print("Download a speech model in Models, then test your microphone in Settings.")

@@ -19,11 +19,14 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
 
 from . import APP_ID, __version__
 from .audio import Recorder
+from .appearance import GlassCanvas, GlassPanel, apply_style
 from .clipboard import ClipboardTransaction
 from .devices import inventory, openvino_devices
 from .jobs import JobController
 from .models import CATALOG, installed_size, local_model, model_dir, remove
 from .settings import Settings, data_dir, load_settings, save_settings
+
+PROFILE_NAMES = {"smart": "Smart Mix", "raw": "Raw", "th_to_eng": "TH → ENG"}
 
 
 def button(text, callback, primary=False):
@@ -45,7 +48,7 @@ class MainWindow(QMainWindow):
             self.settings = Settings()
             self.settings_error = f"Settings could not load: {exc}. Existing file has not been overwritten."
         self.setWindowTitle("PhimThaiMaiPen · พิมพ์ไทยไม่เป็น")
-        self.resize(1040, 760)
+        self.resize(1060, 760)
         self.setMinimumSize(820, 600)
         self.temp = tempfile.TemporaryDirectory(prefix="phimthai-", dir=os.environ.get("XDG_RUNTIME_DIR"))
         self.recording = False
@@ -58,6 +61,11 @@ class MainWindow(QMainWindow):
         self.paste_enabled = False
         self.portal_permission_pending = False
         self.portal = None
+        self.portal_shortcut = ""
+        self.portal_mode_shortcut = ""
+        self.shortcut_process = None
+        self.shortcut_installing = False
+        self.kde_shortcut_state = {}
         self.last_request = None
         self.quitting = False
         self.tray = None
@@ -78,36 +86,68 @@ class MainWindow(QMainWindow):
         self.recorder.level.connect(self.level.setValue)
         self.record_timer = QTimer(self)
         self.record_timer.timeout.connect(self.record_tick)
-        self.statusBar().showMessage(f"Local processing · {__version__}")
+        self.statusBar().showMessage(f"PhimThaiMaiPen {__version__}  ·  ประมวลผลในเครื่อง")
         self.refresh_models()
         self.refresh_device_choices()
         self.setup_tray()
+        apply_style(QApplication.instance(), reduced_transparency=self.settings.reduced_transparency)
+        self.refresh_shortcut_status()
         if self.settings_error:
             self.set_status(self.settings_error)
-        elif not self.settings.onboarding_done:
-            self.set_status("เริ่มต้น / Get started: choose a model, test your microphone, then record. Audio stays on this device.")
+        elif local_model(self.settings.model) is None:
+            self.set_status("เลือกและดาวน์โหลดโมเดลก่อนเริ่มพูด")
+        else:
+            self.set_status("พร้อมแล้ว กดเริ่มพูด เมื่อพูดจบให้กดอีกครั้ง")
         if self.settings.remember_desktop:
             QTimer.singleShot(0, lambda: self.portal_command("restore"))
 
     def build_ui(self):
-        root = QWidget()
+        root = GlassCanvas()
+        root.setObjectName("canvas")
         layout = QHBoxLayout(root)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(24)
-        sidebar = QVBoxLayout()
-        brand = QLabel("PhimThai\nMaiPen")
+        layout.setContentsMargins(18, 18, 18, 14)
+        layout.setSpacing(14)
+        sidebar_panel = GlassPanel()
+        sidebar_panel.setObjectName("sidebar")
+        sidebar_panel.setFixedWidth(180)
+        sidebar = QVBoxLayout(sidebar_panel)
+        sidebar.setContentsMargins(16, 24, 16, 20)
+        sidebar.setSpacing(8)
+        brand = QLabel("PhimThai")
         brand.setObjectName("brand")
         sidebar.addWidget(brand)
+        name = QLabel("MaiPen")
+        name.setObjectName("muted")
+        sidebar.addWidget(name)
+        sidebar.addSpacing(28)
         self.nav = QListWidget()
-        self.nav.addItems(["ข้อความ · Transcript", "โมเดล · Models", "ตั้งค่า · Settings", "ระบบ · Diagnostics"])
-        self.nav.setFixedWidth(205)
+        self.nav.setObjectName("navigation")
+        self.nav.setAccessibleName("หน้าหลักของแอป")
+        self.nav.addItems(["พิมพ์ด้วยเสียง", "โมเดล", "ตั้งค่า", "ตรวจสอบระบบ"])
+        for index, tooltip in enumerate(["Transcript", "Models", "Settings", "Diagnostics"]):
+            self.nav.item(index).setToolTip(tooltip)
         sidebar.addWidget(self.nav)
-        footer = QLabel("ไทย + English\nOn your device")
+        self.shortcut_hint = QLabel(self.settings.hotkey.replace("META", "Meta"))
+        self.shortcut_hint.setObjectName("shortcut")
+        self.shortcut_hint.setToolTip("ปุ่มลัดเริ่มและหยุดพูด · ตั้งค่าได้ในหน้าตั้งค่า")
+        sidebar.addWidget(self.shortcut_hint)
+        self.mode_button = button(PROFILE_NAMES[self.settings.profile], self.cycle_profile)
+        self.mode_button.setToolTip("สลับโหมด · Smart Mix → Raw → TH → ENG")
+        sidebar.addWidget(self.mode_button)
+        self.mode_shortcut_hint = QLabel("")
+        self.mode_shortcut_hint.setObjectName("muted")
+        sidebar.addWidget(self.mode_shortcut_hint)
+        footer = QLabel("ไทย + English\nเสียงอยู่ในเครื่องคุณ")
         footer.setObjectName("muted")
         sidebar.addWidget(footer)
-        layout.addLayout(sidebar)
+        layout.addWidget(sidebar_panel)
+        workspace = GlassPanel()
+        workspace.setObjectName("workspace")
+        content = QVBoxLayout(workspace)
+        content.setContentsMargins(10, 10, 10, 10)
         self.pages = QStackedWidget()
-        layout.addWidget(self.pages, 1)
+        content.addWidget(self.pages)
+        layout.addWidget(workspace, 1)
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.build_transcript()
         self.build_models()
@@ -118,8 +158,9 @@ class MainWindow(QMainWindow):
 
     def page(self, title, subtitle):
         page = QWidget()
+        page.setObjectName("page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(14)
         heading = QLabel(title)
         heading.setObjectName("heading")
@@ -132,29 +173,39 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(page)
+        # QScrollArea turns auto-fill on when a widget is attached. Keep the
+        # glass visible instead of painting the desktop theme's Window brush.
+        page.setAutoFillBackground(False)
+        scroll.viewport().setAutoFillBackground(False)
         self.pages.addWidget(scroll)
         return layout
 
     def build_transcript(self):
-        layout = self.page("พูด แล้วแก้ได้ / Speak, then refine", "Record Thai, English, or both. Review the text before inserting it into another app.")
+        layout = self.page("พูดให้เป็นข้อความ", "ไทย อังกฤษ หรือพูดสลับภาษา · แก้ข้อความได้ก่อนวาง")
         self.onboarding = QWidget()
         first_run = QHBoxLayout(self.onboarding)
         first_run.setContentsMargins(0, 0, 0, 0)
-        first_run.addWidget(QLabel("เริ่มต้น / First run"))
-        first_run.addWidget(button("1 · Choose model", lambda: self.nav.setCurrentRow(1)))
-        first_run.addWidget(button("2 · Test microphone", self.test_mic))
-        self.onboarding.setVisible(not self.settings.onboarding_done)
+        first_run.addWidget(QLabel("เตรียมก่อนเริ่ม"))
+        first_run.addStretch()
+        first_run.addWidget(button("เลือกโมเดล", lambda: self.nav.setCurrentRow(1)))
+        first_run.addWidget(button("ทดสอบไมค์", self.test_mic))
+        self.onboarding.setVisible(local_model(self.settings.model) is None)
         layout.addWidget(self.onboarding)
         row = QHBoxLayout()
-        self.record_button = button("บันทึกเสียง / Record", self.toggle_record, True)
+        self.record_button = button("เริ่มพูด", self.toggle_record, True)
+        self.record_button.setMinimumSize(168, 48)
+        self.record_button.setToolTip("Start / stop recording")
         row.addWidget(self.record_button)
-        row.addWidget(button("เปิดไฟล์เสียง / Open audio", self.open_audio))
-        row.addWidget(button("ยกเลิก / Cancel", self.cancel))
+        row.addWidget(button("เปิดไฟล์เสียง", self.open_audio))
+        row.addStretch()
+        self.cancel_button = button("ยกเลิก", self.cancel)
+        row.addWidget(self.cancel_button)
         layout.addLayout(row)
         self.level = QProgressBar()
         self.level.setRange(0, 100)
         self.level.setValue(0)
-        self.level.setFormat("Microphone level %p%")
+        self.level.setTextVisible(False)
+        self.level.setFixedHeight(8)
         self.level.setAccessibleName("Microphone input level")
         layout.addWidget(self.level)
         self.status = QLabel("Ready")
@@ -162,21 +213,24 @@ class MainWindow(QMainWindow):
         self.status.setObjectName("status")
         layout.addWidget(self.status)
         self.editor = QPlainTextEdit()
-        self.editor.setPlaceholderText("ข้อความจะปรากฏที่นี่ แก้ไขได้ก่อนวาง\nYour transcript appears here. Edit it before pasting.")
+        self.editor.setObjectName("editor")
+        self.editor.setPlaceholderText("เริ่มจากเสียงของคุณ…\n\nข้อความที่ถอดจะปรากฏที่นี่ แล้วแก้ไขได้ตามต้องการ")
         self.editor.setAccessibleName("Editable transcript")
         layout.addWidget(self.editor, 1)
         actions = QHBoxLayout()
-        actions.addWidget(button("คัดลอก / Copy", self.copy))
-        actions.addWidget(button("วางในแอป / Paste", self.paste, True))
-        actions.addWidget(button("แปลอังกฤษ / Translate", self.translate))
-        actions.addWidget(button("ถอดใหม่ / Retry", self.retry))
+        actions.addWidget(button("วางในแอป", self.paste, True))
+        actions.addWidget(button("คัดลอก", self.copy))
+        actions.addStretch()
+        actions.addWidget(button("แปลอังกฤษ", self.translate))
+        actions.addWidget(button("ถอดใหม่", self.retry))
         layout.addLayout(actions)
-        self.metrics = QLabel("Model and processing time appear after transcription")
+        self.metrics = QLabel(CATALOG[self.settings.model].name + " · เวลาและอุปกรณ์จะแสดงเมื่อถอดเสียงเสร็จ")
         self.metrics.setObjectName("muted")
+        self.metrics.setWordWrap(True)
         layout.addWidget(self.metrics)
 
     def build_models(self):
-        layout = self.page("โมเดล / Models", "Choose a model for this device. Memory figures are estimates; language quality depends on your recording.")
+        layout = self.page("เลือกเสียงที่เข้าใจคุณ", "เลือกโมเดลให้เหมาะกับภาษาและเครื่อง ดาวน์โหลดครั้งเดียวแล้วใช้แบบออฟไลน์")
         self.model_list = QListWidget()
         self.model_list.currentRowChanged.connect(self.model_details)
         layout.addWidget(self.model_list)
@@ -184,74 +238,85 @@ class MainWindow(QMainWindow):
         self.model_description.setWordWrap(True)
         layout.addWidget(self.model_description)
         actions = QHBoxLayout()
-        actions.addWidget(button("โหลด / Download or repair", self.download_model, True))
-        actions.addWidget(button("หยุดโหลด / Cancel download", self.cancel_download))
-        actions.addWidget(button("เลือกใช้ / Use model", self.use_model))
-        actions.addWidget(button("ลบ / Remove", self.remove_model))
+        actions.addWidget(button("ดาวน์โหลด / ซ่อมไฟล์", self.download_model, True))
+        actions.addWidget(button("หยุดโหลด", self.cancel_download))
+        actions.addStretch()
+        actions.addWidget(button("เลือกใช้", self.use_model))
+        actions.addWidget(button("ลบโมเดล", self.remove_model))
         layout.addLayout(actions)
         self.download_progress = QProgressBar()
         self.download_progress.setValue(0)
         layout.addWidget(self.download_progress)
-        self.download_status = QLabel("Downloads resume after cancellation. Files are verified before activation.")
+        self.download_status = QLabel("หยุดแล้วโหลดต่อได้ · ตรวจความสมบูรณ์ของไฟล์ก่อนเปิดใช้")
         self.download_status.setWordWrap(True)
         layout.addWidget(self.download_status)
         layout.addStretch()
 
     def build_settings(self):
-        layout = self.page("ตั้งค่า / Settings", "Settings apply to new jobs. Running jobs keep their original model and settings.")
+        layout = self.page("ปรับให้ถนัดคุณ", "ตั้งค่าไมค์ ภาษา และปุ่มลัด การเปลี่ยนแปลงมีผลกับงานถัดไป")
         actions = QHBoxLayout()
-        actions.addWidget(button("บันทึก / Save", self.save, True))
-        actions.addWidget(button("Enable shortcut", lambda: self.portal_command("shortcuts", trigger=self.hotkey.text(), persist=self.remember_desktop.isChecked())))
-        actions.addWidget(button("Enable paste permission", lambda: self.portal_command("enable_paste", persist=self.remember_desktop.isChecked())))
+        actions.addWidget(button("บันทึกการตั้งค่า", self.save, True))
+        actions.addStretch()
+        actions.addWidget(button("เปิดใช้ปุ่มลัด", self.enable_shortcut))
+        actions.addWidget(button("อนุญาตวางข้อความ", lambda: self.portal_command("enable_paste", persist=self.remember_desktop.isChecked())))
         layout.addLayout(actions)
         form = QFormLayout()
         form.setSpacing(12)
         self.microphone = QComboBox()
         self.refresh_microphones()
-        form.addRow("ไมโครโฟน / Microphone", self.microphone)
+        form.addRow("ไมโครโฟน", self.microphone)
         mic_actions = QHBoxLayout()
-        mic_actions.addWidget(button("Refresh inputs", self.refresh_microphones))
-        mic_actions.addWidget(button("ทดสอบเสียง / Test microphone", self.test_mic))
+        mic_actions.addWidget(button("ตรวจหาไมค์", self.refresh_microphones))
+        mic_actions.addWidget(button("ทดสอบไมค์ 5 วินาที", self.test_mic))
         form.addRow(mic_actions)
-        self.profile = self.combo([("Smart Mix", "smart"), ("Raw", "raw"), ("Thai to English", "th_to_eng")], self.settings.profile)
-        form.addRow("โหมด / Profile", self.profile)
-        self.language = self.combo([("Automatic", "auto"), ("Thai (forced)", "Thai"), ("English (forced)", "English")], self.settings.language)
-        form.addRow("ภาษา / Language", self.language)
+        self.profile = self.combo([("Smart Mix · ปรับข้อความให้อ่านง่าย", "smart"), ("Raw · ถอดตามที่พูด", "raw"), ("TH → ENG · พูดไทย แปลอังกฤษ", "th_to_eng")], self.settings.profile)
+        self.profile.currentIndexChanged.connect(lambda: self.mode_button.setText(PROFILE_NAMES[self.profile.currentData()]))
+        form.addRow("รูปแบบข้อความ", self.profile)
+        self.language = self.combo([("อัตโนมัติ · ไทย + English", "auto"), ("ภาษาไทย", "Thai"), ("English", "English")], self.settings.language)
+        form.addRow("ภาษาที่พูด", self.language)
         self.device = self.combo([("Automatic", "auto"), ("CPU", "cpu"), ("GPU (compatible CUDA)", "gpu"), ("NPU (check compatibility)", "npu")], self.settings.device)
-        form.addRow("ประมวลผล / Device", self.device)
-        self.preference = self.combo([("Response speed", "speed"), ("Energy saving (needs measurements)", "power")], self.settings.preference)
-        form.addRow("Automatic preference", self.preference)
+        form.addRow("ประมวลผลด้วย", self.device)
+        self.preference = self.combo([("ตอบสนองเร็ว", "speed"), ("ประหยัดพลังงาน · ต้องมีผลวัด", "power")], self.settings.preference)
+        form.addRow("โหมดอัตโนมัติเน้น", self.preference)
         self.threads = QSpinBox()
         self.threads.setRange(1, os.cpu_count() or 1)
         self.threads.setValue(self.settings.cpu_threads)
         form.addRow("CPU threads", self.threads)
-        self.paste_mode = self.combo([("Review before pasting", "review"), ("Insert after transcription", "immediate")], self.settings.paste_mode)
-        form.addRow("การวาง / Insertion", self.paste_mode)
+        self.paste_mode = self.combo([("ตรวจและแก้ข้อความก่อนวาง", "review"), ("วางทันทีเมื่อถอดเสียงเสร็จ", "immediate")], self.settings.paste_mode)
+        form.addRow("เมื่อพูดจบ", self.paste_mode)
         self.hotkey = QLineEdit(self.settings.hotkey)
-        form.addRow("ปุ่มลัด / Shortcut", self.hotkey)
-        self.history = QCheckBox("Save text history on this device (off by default)")
+        form.addRow("ปุ่มลัดเริ่ม / หยุด", self.hotkey)
+        self.shortcut_status = QLabel("กำลังตรวจปุ่มลัด…")
+        self.shortcut_status.setObjectName("muted")
+        self.shortcut_status.setWordWrap(True)
+        form.addRow(self.shortcut_status)
+        self.history = QCheckBox("เก็บประวัติข้อความในเครื่อง")
         self.history.setChecked(self.settings.keep_history)
         form.addRow(self.history)
-        self.audio_history = QCheckBox("Save audio history on this device (off by default)")
+        self.audio_history = QCheckBox("เก็บประวัติเสียงในเครื่อง")
         self.audio_history.setChecked(self.settings.keep_audio_history)
         form.addRow(self.audio_history)
-        self.vad = QCheckBox("Detect speech and trim silence at the edges")
+        self.vad = QCheckBox("ตรวจช่วงพูดและตัดความเงียบต้น–ท้าย")
         self.vad.setChecked(self.settings.vad)
         form.addRow(self.vad)
+        self.reduced_transparency = QCheckBox("ลดความโปร่งใส เพิ่มความชัดของพื้นหลัง")
+        self.reduced_transparency.setChecked(self.settings.reduced_transparency)
+        self.reduced_transparency.toggled.connect(lambda checked: apply_style(QApplication.instance(), reduced_transparency=checked))
+        form.addRow(self.reduced_transparency)
         layout.addLayout(form)
-        layout.addWidget(QLabel("พจนานุกรม / Dictionary — one source<TAB>replacement per line"))
+        layout.addWidget(QLabel("พจนานุกรมส่วนตัว · คำเดิม ตามด้วย Tab และคำที่ให้แทน"))
         self.dictionary = QPlainTextEdit(self.settings.dictionary)
         self.dictionary.setAccessibleName("Custom replacement dictionary")
         self.dictionary.setMaximumHeight(100)
         layout.addWidget(self.dictionary)
-        self.remember_desktop = QCheckBox("จำปุ่มลัดและสิทธิ์วาง / Restore desktop integration on launch")
+        self.remember_desktop = QCheckBox("จำสิทธิ์วางข้อความและปุ่มลัดที่ขอผ่านระบบ")
         self.remember_desktop.setChecked(self.settings.remember_desktop)
         self.remember_desktop.setToolTip("Enable before granting shortcut/paste permission, then Save. The desktop decides whether permission can persist.")
         layout.addWidget(self.remember_desktop)
-        layout.addWidget(button("ลบประวัติที่บันทึก / Clear saved text and audio history", self.clear_history))
+        layout.addWidget(button("ลบประวัติข้อความและเสียงที่บันทึก", self.clear_history))
 
     def build_diagnostics(self):
-        layout = self.page("ระบบ / Diagnostics", "Hardware detection is separate from verified speech recognition support.")
+        layout = self.page("เครื่องของคุณ", "ตรวจไมค์ โมเดล และอุปกรณ์ที่ใช้ได้ พร้อมข้อมูลสำหรับแก้ปัญหา")
         self.diagnostic_summary = QLabel()
         self.diagnostic_summary.setWordWrap(True)
         layout.addWidget(self.diagnostic_summary)
@@ -259,7 +324,7 @@ class MainWindow(QMainWindow):
         self.diagnostics.setReadOnly(True)
         self.diagnostics.setAccessibleName("Device diagnostics")
         layout.addWidget(self.diagnostics)
-        layout.addWidget(button("ตรวจใหม่ / Refresh", self.refresh_diagnostics))
+        layout.addWidget(button("ตรวจสอบใหม่", self.refresh_diagnostics))
         self.refresh_diagnostics()
 
     @staticmethod
@@ -273,7 +338,7 @@ class MainWindow(QMainWindow):
     def refresh_microphones(self):
         selected = self.microphone.currentData() if self.microphone.count() else self.settings.microphone
         self.microphone.clear()
-        self.microphone.addItem("System default", "")
+        self.microphone.addItem("ไมค์เริ่มต้นของระบบ", "")
         for device in QMediaDevices.audioInputs():
             self.microphone.addItem(device.description(), bytes(device.id()).hex())
         index = self.microphone.findData(selected)
@@ -291,10 +356,12 @@ class MainWindow(QMainWindow):
             vad=self.vad.isChecked(),
             dictionary=self.dictionary.toPlainText(), keep_history=self.history.isChecked(),
             keep_audio_history=self.audio_history.isChecked(), remember_desktop=self.remember_desktop.isChecked(),
+            reduced_transparency=self.reduced_transparency.isChecked(),
             onboarding_done=True).validate()
 
     def save(self):
         try:
+            previous_hotkey = self.settings.hotkey
             self.settings = self.current_settings()
             save_settings(self.settings)
             if not self.settings.remember_desktop:
@@ -304,13 +371,100 @@ class MainWindow(QMainWindow):
                     # A pending permission grant may write a new one-use token.
                     # Process opt-out after that grant in the existing bridge.
                     self.portal_command("forget")
-            self.set_status("Settings saved")
+            self.set_status("บันทึกการตั้งค่าแล้ว")
+            if self.settings.hotkey != previous_hotkey:
+                self.enable_shortcut()
+            self.refresh_shortcut_status()
         except Exception as exc:
             self.error(str(exc))
 
     def set_status(self, text):
         self.status.setText(text)
-        self.statusBar().showMessage(text)
+
+    def refresh_shortcut_status(self):
+        from .kde import is_kde
+        if self.quitting:
+            return self.kde_shortcut_state
+        self.show_shortcut_status()
+        if is_kde() and not Path("/.flatpak-info").exists() and (data_dir() / "bin/phimthai").exists():
+            self.kde_shortcut_command()
+        return self.kde_shortcut_state
+
+    def show_shortcut_status(self):
+        state = self.kde_shortcut_state
+        trigger = state.get("trigger") if state.get("active") else self.portal_shortcut
+        if trigger:
+            self.shortcut_hint.setText(trigger)
+            self.shortcut_status.setText(f"{trigger} · พร้อมเริ่มและหยุดพูด")
+        else:
+            self.shortcut_hint.setText("ตั้งค่าปุ่มลัด")
+            self.shortcut_status.setText("ยังไม่เปิดใช้ปุ่มลัด · กดเปิดใช้ปุ่มลัดด้านบน")
+        mode_trigger = state.get("mode_trigger", "") if state.get("mode_active") else self.portal_mode_shortcut
+        self.mode_shortcut_hint.setText(mode_trigger)
+        if mode_trigger:
+            self.shortcut_status.setText(self.shortcut_status.text() + f"\n{mode_trigger} · สลับโหมด")
+
+    def cycle_profile(self):
+        profiles = list(PROFILE_NAMES)
+        next_profile = profiles[(profiles.index(self.profile.currentData()) + 1) % len(profiles)]
+        try:
+            selected = replace(self.settings, profile=next_profile)
+            save_settings(selected)
+        except Exception as exc:
+            self.error(f"เปลี่ยนโหมดไม่สำเร็จ: {exc}")
+            return
+        self.settings = selected
+        self.profile.setCurrentIndex(self.profile.findData(next_profile))
+        message = f"โหมด {PROFILE_NAMES[next_profile]}"
+        if self.recording or self.jobs.busy:
+            message += " · ใช้กับการพูดครั้งถัดไป"
+        if next_profile == "th_to_eng" and local_model("translate-th-en") is None:
+            message += " · ต้องดาวน์โหลดโมเดลแปลภาษาในหน้าโมเดล"
+        self.set_status(message)
+        if self.tray and self.tray.isVisible():
+            self.tray.showMessage("PhimThaiMaiPen", message, QSystemTrayIcon.MessageIcon.Information, 1800)
+
+    def kde_shortcut_command(self, trigger=None):
+        # D-Bus timeouts and registration must never freeze recording controls.
+        if self.quitting:
+            return
+        if self.shortcut_process is not None:
+            if trigger is not None:
+                self.error("รอตรวจปุ่มลัดเสร็จสักครู่ แล้วลองใหม่")
+            return
+        process = QProcess(self)
+        self.shortcut_process = process
+        self.shortcut_installing = trigger is not None
+        def finished(*_args):
+            if self.shortcut_process is not process:
+                return
+            self.shortcut_process = None
+            self.shortcut_installing = False
+            try:
+                state = json.loads(bytes(process.readAllStandardOutput()))
+            except (ValueError, TypeError):
+                state = {"active": False, "error": "ตรวจปุ่มลัดไม่สำเร็จ ลองเปิดใช้ปุ่มลัดอีกครั้ง"}
+            self.kde_shortcut_state = state
+            self.show_shortcut_status()
+            if trigger is not None:
+                if state.get("active"):
+                    self.set_status(f"ปุ่มลัด {state['trigger']} พร้อมใช้งาน")
+                else:
+                    self.error(state.get("error", "เปิดใช้ปุ่มลัดไม่สำเร็จ"))
+            process.deleteLater()
+            if self.quitting:
+                QTimer.singleShot(0, self.quit)
+        process.finished.connect(finished)
+        process.errorOccurred.connect(lambda error: finished() if error == QProcess.ProcessError.FailedToStart else None)
+        args = ["-m", "phimthai.kde", "--status"] if trigger is None else ["-m", "phimthai.kde", "--install", trigger]
+        process.start(sys.executable, args)
+
+    def enable_shortcut(self):
+        from .kde import is_kde
+        if is_kde() and not Path("/.flatpak-info").exists():
+            self.kde_shortcut_command(self.hotkey.text().strip())
+        else:
+            self.portal_command("shortcuts", trigger=self.hotkey.text(), persist=self.remember_desktop.isChecked())
 
     def error(self, message):
         self.set_status("Error: " + message)
@@ -337,10 +491,10 @@ class MainWindow(QMainWindow):
             self.recorder.start(self.audio_path, self.record_settings.microphone)
             self.recording = True
             self.record_started = time.monotonic()
-            self.record_button.setText("หยุด / Stop")
+            self.record_button.setText("หยุดพูด")
             self.record_timer.start(200)
             self.nav.setCurrentRow(0)
-            self.set_status("Recording — press Stop when finished")
+            self.set_status("กำลังฟัง… พูดจบแล้วกดหยุดพูดหรือปุ่มลัดอีกครั้ง")
         except Exception as exc:
             self.recorder.stop()
             self.test_microphone = False
@@ -348,7 +502,7 @@ class MainWindow(QMainWindow):
 
     def record_tick(self):
         seconds = int(time.monotonic() - self.record_started)
-        self.set_status(f"Recording · {seconds // 60:02d}:{seconds % 60:02d}")
+        self.set_status(f"กำลังฟัง…  {seconds // 60:02d}:{seconds % 60:02d}  ·  กดอีกครั้งเมื่อพูดจบ")
         if seconds >= (5 if self.test_microphone else 900):
             self.finish_recording()
 
@@ -356,7 +510,7 @@ class MainWindow(QMainWindow):
         self.recording = False
         self.record_timer.stop()
         valid = self.recorder.stop()
-        self.record_button.setText("บันทึกเสียง / Record")
+        self.record_button.setText("เริ่มพูด")
         if self.test_microphone:
             self.test_microphone = False
             self.audio_path.unlink(missing_ok=True)
@@ -497,7 +651,7 @@ class MainWindow(QMainWindow):
             self.record_timer.stop()
             self.recorder.stop()
             self.recording = False
-            self.record_button.setText("บันทึกเสียง / Record")
+            self.record_button.setText("เริ่มพูด")
             if self.audio_path:
                 self.audio_path.unlink(missing_ok=True)
         self.test_microphone = False
@@ -576,6 +730,11 @@ class MainWindow(QMainWindow):
             event = response.get("event")
             if event == "shortcut":
                 self.toggle_record()
+            elif event == "cycle_mode":
+                self.cycle_profile()
+            elif event == "mode_shortcut_enabled":
+                self.portal_mode_shortcut = response.get("trigger", "")
+                self.show_shortcut_status()
             elif event == "paste_enabled":
                 self.paste_enabled = True
                 self.set_status("Paste permission enabled" + ("; desktop supports restoring it on launch" if response.get("persistent") else " for this session"))
@@ -583,8 +742,13 @@ class MainWindow(QMainWindow):
                 self.clipboard.restore_later()
                 self.set_status("Paste keys sent. Check the target app; clipboard will be restored.")
             elif event == "shortcuts_enabled":
+                self.portal_shortcut = response.get("trigger", "Configured by desktop")
+                self.refresh_shortcut_status()
                 self.set_status("Global shortcut: " + response.get("trigger", "Configured by desktop"))
             elif event == "shortcuts_disabled":
+                self.portal_shortcut = ""
+                self.portal_mode_shortcut = ""
+                self.refresh_shortcut_status()
                 self.set_status("No active global shortcut. Enable or configure one in Settings.")
             elif event == "paste_disabled":
                 self.paste_enabled = False
@@ -601,6 +765,9 @@ class MainWindow(QMainWindow):
         self.portal_permission_pending = False
         self.portal = None
         self.portal_buffer = b""
+        self.portal_shortcut = ""
+        self.portal_mode_shortcut = ""
+        self.refresh_shortcut_status()
         self.clipboard.restore()
 
     def portal_error(self, error):
@@ -778,8 +945,17 @@ class MainWindow(QMainWindow):
             self.hide()
             event.ignore()
             return
+        self.quitting = True
         self.cancel()
         self.clipboard.restore()
+        if self.shortcut_process and self.shortcut_installing:
+            # Let the desktop transaction finish or roll back before exiting.
+            self.set_status("กำลังตั้งปุ่มลัด รอสักครู่แล้วแอปจะปิดให้")
+            event.ignore()
+            return
+        if self.shortcut_process:
+            self.shortcut_process.kill()
+            self.shortcut_process.waitForFinished(3000)
         if self.download_process:
             self.download_process.kill()
             self.download_process.waitForFinished(3000)
@@ -792,15 +968,16 @@ class MainWindow(QMainWindow):
     def quit(self):
         self.quitting = True
         self.close()
-        QApplication.instance().quit()
+        if not (self.shortcut_process and self.shortcut_installing):
+            QApplication.instance().quit()
 
     def setup_tray(self):
-        quit_action = QAction("Quit PhimThaiMaiPen", self)
+        quit_action = QAction("ออกจาก PhimThaiMaiPen", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.quit)
         self.addAction(quit_action)
-        menu_bar = self.menuBar().addMenu("Application")
-        clear_action = QAction("Clear transcript and temporary audio", self)
+        menu_bar = self.menuBar().addMenu("แอป")
+        clear_action = QAction("ล้างข้อความและเสียงชั่วคราว", self)
         clear_action.setShortcut("Ctrl+L")
         clear_action.triggered.connect(self.clear_current)
         menu_bar.addAction(clear_action)
@@ -812,9 +989,9 @@ class MainWindow(QMainWindow):
             self.tray = QSystemTrayIcon(icon, self)
             self.tray.setToolTip("PhimThaiMaiPen · Voice typing")
             menu = QMenu(self)
-            menu.addAction("Open PhimThaiMaiPen", self.showNormal)
-            menu.addAction("Start / stop recording", self.toggle_record)
-            menu.addAction("Cancel", self.cancel)
+            menu.addAction("เปิด PhimThaiMaiPen", self.showNormal)
+            menu.addAction("เริ่ม / หยุดพูด", self.toggle_record)
+            menu.addAction("ยกเลิก", self.cancel)
             menu.addSeparator()
             menu.addAction(quit_action)
             self.tray.setContextMenu(menu)
@@ -842,7 +1019,8 @@ def single_instance(app):
         socket = QLocalSocket()
         socket.connectToServer(name)
         if socket.waitForConnected(2000):
-            socket.write(b"toggle\n" if "--toggle" in sys.argv else b"show\n")
+            command = b"toggle\n" if "--toggle" in sys.argv else b"cycle-mode\n" if "--cycle-mode" in sys.argv else b"show\n"
+            socket.write(command)
             socket.waitForBytesWritten(1000)
             socket.disconnectFromServer()
             return None
@@ -855,37 +1033,24 @@ def single_instance(app):
     return server
 
 
-def apply_style(app):
-    app.setStyle("Fusion")
-    # The stylesheet uses a light palette; avoid inheriting white label text
-    # from a dark desktop theme onto these light surfaces.
-    app.setPalette(app.style().standardPalette())
-    app.setStyleSheet("""
-        QWidget { font-size: 14px; }
-        QMainWindow { background: #f6f7f9; }
-        QLabel#brand { font-size: 27px; font-weight: 700; color: #17365d; padding: 8px 0 22px; }
-        QLabel#heading { font-size: 25px; font-weight: 600; color: #162c48; }
-        QLabel#muted { color: #536279; }
-        QLabel#status { color: #25486d; background: #e8eef6; padding: 12px; border-radius: 6px; }
-        QListWidget { border: 0; background: transparent; }
-        QListWidget::item { padding: 12px 8px; margin-bottom: 4px; }
-        QListWidget::item:selected { background: #dce8f6; color: #15385f; border-radius: 6px; }
-        QPlainTextEdit, QLineEdit, QComboBox, QSpinBox { background: white; color: #172b43; border: 1px solid #c6cfdb; border-radius: 5px; padding: 7px; }
-        QPlainTextEdit:focus, QLineEdit:focus { border: 2px solid #3972ad; }
-        QPushButton { padding: 7px 12px; border: 1px solid #bbc7d6; border-radius: 5px; background: white; color: #17365d; }
-        QPushButton:hover { background: #e8eef6; }
-        QPushButton:focus { border: 2px solid #3972ad; }
-        QPushButton[primary=true] { background: #205f9e; color: white; border-color: #205f9e; }
-        QProgressBar { border: 1px solid #c6cfdb; border-radius: 4px; text-align: center; min-height: 18px; }
-        QProgressBar::chunk { background: #70b4a6; }
-    """)
-
-
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("PhimThaiMaiPen")
     app.setOrganizationName("PhimThaiMaiPen")
     app.setDesktopFileName(APP_ID)
+    if "--status" in sys.argv:
+        socket = QLocalSocket()
+        socket.connectToServer(APP_ID + "-" + str(os.getuid()))
+        if not socket.waitForConnected(1500):
+            print(json.dumps({"running": False}))
+            return 1
+        socket.write(b"status\n")
+        socket.waitForBytesWritten(1000)
+        if not socket.waitForReadyRead(2000):
+            print(json.dumps({"running": True, "error": "Application did not report its status"}))
+            return 2
+        print(bytes(socket.readAll()).decode().strip())
+        return 0
     server = single_instance(app)
     if server is None:
         return 0
@@ -897,10 +1062,19 @@ def main():
             command = bytes(socket.readAll()).strip()
             if command == b"toggle":
                 window.toggle_record()
+            elif command == b"cycle-mode":
+                window.cycle_profile()
             elif command == b"show":
                 window.showNormal()
                 window.raise_()
                 window.activateWindow()
+            elif command == b"status":
+                socket.write((json.dumps({"running": True, "pid": os.getpid(),
+                    "version": __version__, "recording": window.recording,
+                    "busy": window.jobs.busy, "transcript_characters": len(window.editor.toPlainText()),
+                    "shortcut": window.shortcut_hint.text(), "mode_shortcut": window.mode_shortcut_hint.text(),
+                    "profile": window.profile.currentData(), "visible": window.isVisible()}) + "\n").encode())
+                socket.flush()
             socket.disconnectFromServer()
             socket.deleteLater()
         socket.readyRead.connect(read_command)
@@ -912,4 +1086,6 @@ def main():
         QTimer.singleShot(1000, window.quit)
     elif "--toggle" in sys.argv:
         QTimer.singleShot(0, window.toggle_record)
+    elif "--cycle-mode" in sys.argv:
+        QTimer.singleShot(0, window.cycle_profile)
     return app.exec()
