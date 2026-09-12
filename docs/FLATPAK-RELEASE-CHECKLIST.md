@@ -12,6 +12,7 @@ Delivered: [PhimThaiMaiPen 2.0.0-beta.1](https://github.com/Tatarus9450/PhimThai
 - [x] Run actual Qwen CPU transcription of two hash-pinned public audio clips with networking disabled, using the packaged `/app` code and Platform runtime
 - [x] Export the bundle and successfully import it into a separate repository without installing over the running native application
 - [x] Complete [GitHub Actions run `34675954504`](https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34675954504/job/103505737063), publish the prerelease, and confirm all eight assets are publicly available
+- [x] Download all eight published assets and verify each SHA-256 against the GitHub API digest; also verify the Flatpak against `SHA256SUMS`
 
 ## Artifact identity
 
