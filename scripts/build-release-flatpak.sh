@@ -131,7 +131,10 @@ pins = dict(line.split('==') for line in (root / '.cache/release-constraints.txt
 records = []
 for wheel in sorted((root / '.cache/flatpak-wheels').glob('*.whl')):
     with zipfile.ZipFile(wheel) as archive:
-        metadata_paths = [name for name in archive.namelist() if name.endswith('.dist-info/METADATA')]
+        # setuptools contains vendored distributions with their own metadata.
+        # Only the wheel's top-level dist-info describes the downloaded package.
+        metadata_paths = [name for name in archive.namelist()
+                          if name.count('/') == 1 and name.endswith('.dist-info/METADATA')]
         if len(metadata_paths) != 1:
             raise SystemExit('Ambiguous wheel metadata: ' + wheel.name)
         metadata = email.message_from_bytes(archive.read(metadata_paths[0]))
