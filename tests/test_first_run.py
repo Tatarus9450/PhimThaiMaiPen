@@ -85,6 +85,21 @@ class DownloadSetupTests(IsolatedWindow, unittest.TestCase):
         self.assertIsNone(self.window.download_process)
         self.process.start.assert_not_called()
 
+    def test_record_availability_tracks_model_and_preserves_stop(self):
+        self.window.update_setup_view()
+        self.assertFalse(self.window.record_button.isEnabled())
+        self.window.recording = True
+        self.window.update_setup_view()
+        self.assertTrue(self.window.record_button.isEnabled())
+        self.window.recording = False
+        with patch("phimthai.app.local_model", return_value=self.root):
+            self.window.update_setup_view()
+            self.assertTrue(self.window.record_button.isEnabled())
+            self.window.downloading_model = self.window.settings.model
+            self.window.update_setup_view()
+            self.assertFalse(self.window.record_button.isEnabled())
+        self.window.downloading_model = None
+
 
 class DesktopSetupTests(IsolatedWindow, unittest.TestCase):
     def setUp(self):

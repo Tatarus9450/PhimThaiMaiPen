@@ -79,9 +79,12 @@ def install_launchers(python, data_home):
     text = (asset_dir / desktop.name).read_text()
     text = text.replace("Exec=phimthai", "Exec=/usr/bin/env " + desktop_argument(launcher))
     desktop.write_text(text)
-    icon = data_home / "icons/hicolor/scalable/apps" / (APP_ID + ".svg")
+    icon = data_home / "icons/hicolor/512x512/apps" / (APP_ID + ".png")
     icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(asset_dir / icon.name, icon)
+    # Retire only this app's old icon, after the replacement is installed.
+    legacy_icon = data_home / "icons/hicolor/scalable/apps" / (APP_ID + ".svg")
+    legacy_icon.unlink(missing_ok=True)
     if shutil.which("update-desktop-database"):
         subprocess.run(["update-desktop-database", str(desktop.parent)], check=False)
     return launcher, desktop

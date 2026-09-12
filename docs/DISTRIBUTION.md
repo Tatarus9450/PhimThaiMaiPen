@@ -1,13 +1,15 @@
 # Flatpak beta distribution
 
-Updated 2026-09-12. **Beta 2 is pending CI build, offline ASR and bundle verification before publication.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b2`; intended Git tag `v2.0.0-beta.2`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
+Updated 2026-09-12. **Beta 3 is pending CI build, offline ASR and bundle verification before publication.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b3`; intended Git tag `v2.0.0-beta.3`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
+
+Beta 3 introduces a generated, text-free [penguin microphone icon](../phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png) and a cobalt, amber and ivory glass interface. Native and Flatpak packages install the 512×512 PNG under the same application ID. The first-launch download, desktop consent flow and CPU default continue unchanged
 
 ## Install, update and rollback
 
-After the CI gates pass and beta 2 is published, download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.2). Verify with `sha256sum --check SHA256SUMS`, then open the bundle in Discover or run:
+After the CI gates pass and beta 3 is published, download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3). Verify with `sha256sum --check --ignore-missing SHA256SUMS`, then open the bundle in Discover or run:
 
 ```bash
-flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.2-x86_64.flatpak
+flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak
 flatpak run --branch=beta io.github.tatarus9450.PhimThaiMaiPen
 ```
 
@@ -39,13 +41,13 @@ flatpak run org.flatpak.Builder --user --force-clean \
 mkdir -p dist
 flatpak build-bundle --arch=x86_64 \
   --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.2-x86_64.flatpak \
+  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak \
   io.github.tatarus9450.PhimThaiMaiPen beta
 ```
 
 Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Permissions are Wayland, X11 (also under Wayland for the XCB popup), IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
 
-The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. **Auto stays on CPU in beta 2.** GPU and NPU options show a red **Beta** warning; they remain under development and CPU is recommended for ordinary dictation. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
+The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. **Auto stays on CPU in beta 3.** GPU and NPU options show a red **Beta** warning; they remain under development and CPU is recommended for ordinary dictation. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
 
 ## Historical integration evidence
 

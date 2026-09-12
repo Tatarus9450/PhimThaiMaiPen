@@ -184,6 +184,13 @@ def main():
                                                "remember_desktop": True, "paste_mode": "immediate"},
                     "First-launch download/desktop defaults are incorrect")
             report["source"] = check_packaged_source(package)
+            icon_name = phimthai.APP_ID + ".png"
+            desktop_icon = Path("/app/share/icons/hicolor/512x512/apps") / icon_name
+            require(desktop_icon.is_file(), "Desktop penguin icon is missing")
+            require(digest(desktop_icon) == digest(package / "assets" / icon_name),
+                    "Desktop icon differs from the packaged application icon")
+            report["desktop_icon"] = {"path": str(desktop_icon), "sha256": digest(desktop_icon),
+                                      "matches_application": True}
             report["dependencies"] = check_dependency_metadata()
             require(not report["dependencies"]["failures"], "Installed dependency metadata is inconsistent")
             report["versions"] = {name: metadata.version(name) for name in

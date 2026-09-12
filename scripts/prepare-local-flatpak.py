@@ -52,7 +52,7 @@ manifest = {
         "python3 -c \"from phimthai.settings import Settings; s = Settings(); assert s.model == 'qwen-0.6b' and s.profile == 'smart'\"",
         f"install -Dm644 phimthai/assets/{APP_ID}.desktop /app/share/applications/{APP_ID}.desktop",
         f"install -Dm644 phimthai/assets/{APP_ID}.metainfo.xml /app/share/metainfo/{APP_ID}.metainfo.xml",
-        f"install -Dm644 phimthai/assets/{APP_ID}.svg /app/share/icons/hicolor/scalable/apps/{APP_ID}.svg",
+        f"install -Dm644 phimthai/assets/{APP_ID}.png /app/share/icons/hicolor/512x512/apps/{APP_ID}.png",
         "install -Dm644 LICENSE /app/share/licenses/phimthai/LICENSE",
     ], "sources": [
         {"type": "archive", "path": "flatpak-source.tar.gz", "strip-components": 0,

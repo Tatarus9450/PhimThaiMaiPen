@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0b2",
+  "source_commit": "6618a9d7",
+  "application_tests": {
+    "count": 142,
+    "status": "passed"
+  },
+  "legacy_tests": {
+    "count": 6,
+    "status": "passed"
+  },
+  "ui": {
+    "cases": 32,
+    "geometry_issues": 0,
+    "first_download_render_820x600": "passed",
+    "scope": "Owned offscreen Qt windows with simulated external services"
+  },
+  "first_run_cases": [
+    "Recommended model starts once after interactive launch",
+    "Cancel remains paused and manual resume works",
+    "Quit preserves automatic resume state",
+    "Deletion does not redownload automatically",
+    "Permission requests run sequentially and readiness uses enabled events",
+    "Denial stops first-run retries; interrupted setup resumes",
+    "Native custom bindings are preserved",
+    "Cold hotkey launch restores desktop permissions first",
+    "Settings write failure cannot leave phantom downloads",
+    "Imported model identity survives a new worker process",
+    "Corrupt and unsupported imported data rejected",
+    "Auto stays on CPU; GPU/NPU labels and red warning checked"
+  ],
+  "real_model_import": {
+    "status": "passed",
+    "scope": "Imported real local Qwen snapshot into temporary managed storage; original unchanged; no inference, microphone or desktop access",
+    "bytes": 1880562406,
+    "seconds": 4.08,
+    "origin": "local",
+    "source_exists": true
+  },
+  "limits": [
+    "No live microphone, clipboard, audible cue or OS consent exercised in these tests",
+    "Hardware acceleration remains Beta and is never selected by Auto",
+    "Flatpak build, packaged ASR and public download are verified separately by release CI"
+  ]
+}

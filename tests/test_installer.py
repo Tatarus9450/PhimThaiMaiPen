@@ -60,6 +60,35 @@ class InstallerTests(unittest.TestCase):
                 subprocess.run([str(launcher), *arguments], check=True, timeout=10)
                 self.assertEqual(json.loads(capture.read_text()), ["-m", "phimthai", *arguments])
 
+    def test_icon_upgrade_installs_png_and_retires_only_the_owned_svg(self):
+        data = self.base / "icon upgrade"
+        legacy = data / "icons/hicolor/scalable/apps" / (INSTALLER.APP_ID + ".svg")
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("old application icon")
+        unrelated = legacy.with_name("another.application.svg")
+        unrelated.write_text("keep unrelated icon")
+
+        INSTALLER.install_launchers(Path(sys.executable), data)
+
+        icon = data / "icons/hicolor/512x512/apps" / (INSTALLER.APP_ID + ".png")
+        source = ROOT / "phimthai/assets" / icon.name
+        self.assertEqual(icon.read_bytes(), source.read_bytes())
+        self.assertFalse(legacy.exists())
+        self.assertEqual(unrelated.read_text(), "keep unrelated icon")
+        # Reinstalling must also succeed once the legacy file is gone.
+        INSTALLER.install_launchers(Path(sys.executable), data)
+        self.assertTrue(icon.is_file())
+
+    def test_failed_png_install_preserves_the_legacy_icon(self):
+        data = self.base / "failed icon upgrade"
+        legacy = data / "icons/hicolor/scalable/apps" / (INSTALLER.APP_ID + ".svg")
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("keep until replacement succeeds")
+        with mock.patch.object(INSTALLER.shutil, "copyfile", side_effect=OSError("copy failed")):
+            with self.assertRaisesRegex(OSError, "copy failed"):
+                INSTALLER.install_launchers(Path(sys.executable), data)
+        self.assertEqual(legacy.read_text(), "keep until replacement succeeds")
+
     def test_desktop_main_and_record_actions_preserve_special_paths(self):
         gi_python = None
         for candidate in dict.fromkeys((sys.executable, "/usr/bin/python3")):

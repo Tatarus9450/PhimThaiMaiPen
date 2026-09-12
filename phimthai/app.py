@@ -51,6 +51,8 @@ class MainWindow(QMainWindow):
             self.settings = Settings()
             self.settings_error = f"Settings could not load: {exc}. Existing file has not been overwritten."
         self.setWindowTitle("PhimThaiMaiPen · พิมพ์ไทยไม่เป็น")
+        self.app_icon = QIcon(str(Path(__file__).parent / "assets" / (APP_ID + ".png")))
+        self.setWindowIcon(self.app_icon)
         self.resize(1060, 760)
         self.setMinimumSize(820, 600)
         self.temp = tempfile.TemporaryDirectory(prefix="phimthai-", dir=os.environ.get("XDG_RUNTIME_DIR"))
@@ -196,6 +198,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "setup_message"):
             return
         ready = local_model(self.settings.model) is not None
+        self.record_button.setEnabled(self.recording or
+                                      (ready and self.downloading_model != self.settings.model))
         if self.download_process and (self.downloading_model == self.settings.model or self.importing):
             self.setup_message.setText(self.download_status.text())
             self.setup_progress.setRange(self.download_progress.minimum(), self.download_progress.maximum())
@@ -240,13 +244,18 @@ class MainWindow(QMainWindow):
         sidebar = QVBoxLayout(sidebar_panel)
         sidebar.setContentsMargins(16, 24, 16, 20)
         sidebar.setSpacing(8)
-        brand = QLabel("PhimThai")
+        identity = QHBoxLayout()
+        identity.setSpacing(9)
+        mascot = QLabel()
+        mascot.setPixmap(self.app_icon.pixmap(44, 44))
+        mascot.setFixedSize(44, 44)
+        mascot.setAccessibleName("เพนกวินถือไมค์ · PhimThaiMaiPen")
+        identity.addWidget(mascot)
+        brand = QLabel("PhimThai\nMaiPen")
         brand.setObjectName("brand")
-        sidebar.addWidget(brand)
-        name = QLabel("MaiPen")
-        name.setObjectName("muted")
-        sidebar.addWidget(name)
-        sidebar.addSpacing(28)
+        identity.addWidget(brand)
+        sidebar.addLayout(identity)
+        sidebar.addSpacing(24)
         self.nav = QListWidget()
         self.nav.setObjectName("navigation")
         self.nav.setAccessibleName("หน้าหลักของแอป")
@@ -259,6 +268,7 @@ class MainWindow(QMainWindow):
         self.shortcut_hint.setToolTip("ปุ่มลัดเริ่มและหยุดพูด · ตั้งค่าได้ในหน้าตั้งค่า")
         sidebar.addWidget(self.shortcut_hint)
         self.mode_button = button(PROFILE_NAMES[self.settings.profile], self.cycle_profile)
+        self.mode_button.setObjectName("modeSwitch")
         self.mode_button.setToolTip("สลับโหมด · Smart Mix → Raw → TH → ENG")
         sidebar.addWidget(self.mode_button)
         self.mode_shortcut_hint = QLabel("")
@@ -308,11 +318,13 @@ class MainWindow(QMainWindow):
         return layout
 
     def build_transcript(self):
-        layout = self.page("พูดให้เป็นข้อความ", "ไทย อังกฤษ หรือพูดสลับภาษา · แก้ข้อความได้ก่อนวาง")
+        layout = self.page("พิมพ์ด้วยเสียง", "พูดไทย อังกฤษ หรือสลับภาษาได้ในประโยคเดียว")
         self.onboarding = QWidget()
+        self.onboarding.setObjectName("onboarding")
         first_run = QVBoxLayout(self.onboarding)
-        first_run.setContentsMargins(0, 0, 0, 0)
+        first_run.setContentsMargins(14, 12, 14, 12)
         self.setup_message = QLabel("เริ่มต้นครั้งแรก · ระบบจะดาวน์โหลด Qwen3-ASR 0.6B ประมาณ 1.89 GB ให้อัตโนมัติ\nดาวน์โหลดเสร็จแล้วใช้แบบออฟไลน์ได้ ภายหลังลบหรือเปลี่ยนโมเดลได้ในหน้าโมเดล")
+        self.setup_message.setObjectName("setupMessage")
         self.setup_message.setWordWrap(True)
         first_run.addWidget(self.setup_message)
         self.setup_progress = QProgressBar()
@@ -323,7 +335,7 @@ class MainWindow(QMainWindow):
         self.setup_desktop.setWordWrap(True)
         first_run.addWidget(self.setup_desktop)
         first_actions = QHBoxLayout()
-        self.setup_resume = button("โหลดโมเดลต่อ", lambda: self.download_model(model_id=self.settings.model))
+        self.setup_resume = button("โหลดโมเดลต่อ", lambda: self.download_model(model_id=self.settings.model), True)
         self.setup_stop = button("หยุดดาวน์โหลด", self.cancel_download)
         first_actions.addWidget(self.setup_resume)
         first_actions.addWidget(self.setup_stop)
@@ -336,6 +348,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.onboarding)
         row = QHBoxLayout()
         self.record_button = button("เริ่มพูด", self.toggle_record, True)
+        self.record_button.setObjectName("recordControl")
         self.record_button.setMinimumSize(168, 48)
         self.record_button.setToolTip("Start / stop recording")
         row.addWidget(self.record_button)
@@ -355,13 +368,18 @@ class MainWindow(QMainWindow):
         self.status.setWordWrap(True)
         self.status.setObjectName("status")
         layout.addWidget(self.status)
+        transcript_label = QLabel("ข้อความของคุณ")
+        transcript_label.setObjectName("section")
+        layout.addWidget(transcript_label)
         self.editor = QPlainTextEdit()
         self.editor.setObjectName("editor")
         self.editor.setPlaceholderText("เริ่มจากเสียงของคุณ…\n\nข้อความที่ถอดจะปรากฏที่นี่ แล้วแก้ไขได้ตามต้องการ")
         self.editor.setAccessibleName("Editable transcript")
         layout.addWidget(self.editor, 1)
         actions = QHBoxLayout()
-        actions.addWidget(button("วางในแอป", self.paste, True))
+        paste_button = button("วางในแอป", self.paste)
+        paste_button.setObjectName("pasteAction")
+        actions.addWidget(paste_button)
         actions.addWidget(button("คัดลอก", self.copy))
         actions.addStretch()
         actions.addWidget(button("แปลอังกฤษ", self.translate))
@@ -373,7 +391,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.metrics)
 
     def build_models(self):
-        layout = self.page("เลือกเสียงที่เข้าใจคุณ", "เลือกโมเดลให้เหมาะกับภาษาและเครื่อง ดาวน์โหลดครั้งเดียวแล้วใช้แบบออฟไลน์")
+        layout = self.page("โมเดลถอดเสียง", "เลือก ดาวน์โหลด หรือนำเข้าโมเดลของคุณ · ใช้งานในเครื่อง")
         self.model_list = QListWidget()
         self.model_list.currentRowChanged.connect(self.model_details)
         layout.addWidget(self.model_list)
@@ -381,6 +399,15 @@ class MainWindow(QMainWindow):
         self.model_description.setWordWrap(True)
         self.model_description.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.model_description)
+        technical_toggle = QCheckBox("แสดงข้อมูลทางเทคนิค")
+        layout.addWidget(technical_toggle)
+        self.model_technical = QLabel()
+        self.model_technical.setObjectName("muted")
+        self.model_technical.setWordWrap(True)
+        self.model_technical.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.model_technical)
+        self.model_technical.hide()
+        technical_toggle.toggled.connect(self.model_technical.setVisible)
         self.model_beta_warning = QLabel(BETA_WARNING)
         self.model_beta_warning.setObjectName("betaWarning")
         self.model_beta_warning.setWordWrap(True)
@@ -404,7 +431,7 @@ class MainWindow(QMainWindow):
         layout.addStretch()
 
     def build_settings(self):
-        layout = self.page("ปรับให้ถนัดคุณ", "ตั้งค่าไมค์ ภาษา และปุ่มลัด การเปลี่ยนแปลงมีผลกับงานถัดไป")
+        layout = self.page("ตั้งค่า", "ไมค์ ภาษา และปุ่มลัด · การเปลี่ยนแปลงมีผลกับงานถัดไป")
         actions = QHBoxLayout()
         actions.addWidget(button("บันทึกการตั้งค่า", self.save, True))
         actions.addStretch()
@@ -663,6 +690,7 @@ class MainWindow(QMainWindow):
             self.recording = True
             self.record_started = time.monotonic()
             self.record_button.setText("หยุดพูด")
+            self.record_button.setEnabled(True)
             self.record_timer.start(200)
             self.nav.setCurrentRow(0)
             self.set_status("กำลังฟัง… พูดจบแล้วกดหยุดพูดหรือปุ่มลัดอีกครั้ง")
@@ -685,6 +713,7 @@ class MainWindow(QMainWindow):
         self.record_timer.stop()
         valid = self.recorder.stop()
         self.record_button.setText("เริ่มพูด")
+        self.update_setup_view()
         if self.test_microphone:
             self.test_microphone = False
             self.audio_path.unlink(missing_ok=True)
@@ -843,6 +872,7 @@ class MainWindow(QMainWindow):
                 self.audio_path.unlink(missing_ok=True)
         self.test_microphone = False
         self.jobs.cancel()
+        self.update_setup_view()
 
     def copy(self):
         if self.paste_committed:
@@ -1020,8 +1050,8 @@ class MainWindow(QMainWindow):
         for key, spec in CATALOG.items():
             size = installed_size(key)
             size_text = f"{size / 1e9:.2f} GB" if size >= 1e9 else f"{size / 1e6:.0f} MB"
-            status = f"Available · {size_text}" if size else "Not downloaded"
-            self.model_list.addItem(f"{spec.name}\n{status}" + (" · Selected" if key == self.settings.model else ""))
+            status = f"พร้อมใช้ · {size_text}" if size else "ยังไม่ได้ดาวน์โหลด"
+            self.model_list.addItem(f"{spec.name}\n{status}" + (" · เลือกอยู่" if key == self.settings.model else ""))
         self.model_list.setCurrentRow(min(max(0, current), len(CATALOG) - 1))
 
     def model_details(self, _index):
@@ -1029,7 +1059,10 @@ class MainWindow(QMainWindow):
         from .performance import measurements
         rates = measurements().get(spec.id, {})
         formats = {"qwen": "SafeTensors", "openvino": "OpenVINO IR · INT8", "fastflowlm": "Q4NX", "marian": "PyTorch + SentencePiece", "vulkan": "GGML · Q5"}
-        self.model_description.setText(f"{spec.repo}\n{', '.join(spec.languages)} · {spec.license}\nDownload: ~{spec.download_gb:.2f} GB · Estimated memory: {spec.memory_gb} GB\nBackend: {spec.backend} · Devices: {' / '.join(spec.devices)}\nFormat: {formats[spec.backend]}\nStatus: {spec.status}\nRevision: {spec.revision[:12]}\nMeasured seconds per audio second: {rates or 'No measurements yet'}")
+        storage = (f"นำเข้าจากโฟลเดอร์ · ใช้พื้นที่ {installed_size(spec.id) / 1e9:.2f} GB"
+                   if spec.origin == "local" else f"ดาวน์โหลดประมาณ {spec.download_gb:.2f} GB")
+        self.model_description.setText(f"{storage} · หน่วยความจำประมาณ {spec.memory_gb} GB\nภาษา: {', '.join(spec.languages)}\nสิทธิ์การใช้งาน: {spec.license}")
+        self.model_technical.setText(f"{spec.repo}\nBackend: {spec.backend} · Devices: {' / '.join(spec.devices)}\nFormat: {formats[spec.backend]}\nStatus: {spec.status}\nRevision: {spec.revision[:12]}\nMeasured seconds per audio second: {rates or 'No measurements yet'}")
         self.download_button.setEnabled(spec.origin != "local")
         self.model_beta_warning.setVisible(any(device in spec.devices for device in ("gpu", "npu")))
 
@@ -1304,10 +1337,7 @@ class MainWindow(QMainWindow):
         menu_bar.addAction(clear_action)
         menu_bar.addAction(quit_action)
         if QSystemTrayIcon.isSystemTrayAvailable():
-            icon_path = Path(__file__).parent / "assets" / (APP_ID + ".svg")
-            icon = QIcon(str(icon_path)) if icon_path.exists() else QIcon.fromTheme("audio-input-microphone")
-            self.setWindowIcon(icon)
-            self.tray = QSystemTrayIcon(icon, self)
+            self.tray = QSystemTrayIcon(self.app_icon, self)
             self.tray.setToolTip("PhimThaiMaiPen · Voice typing")
             menu = QMenu(self)
             menu.addAction("เปิด PhimThaiMaiPen", self.showNormal)

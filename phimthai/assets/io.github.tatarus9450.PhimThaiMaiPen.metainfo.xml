@@ -14,6 +14,7 @@
     <p>Turn Thai and English speech into editable text on your Linux desktop. Record with your microphone or open an audio file, then paste automatically after granting desktop permission, or review and copy the result.</p>
     <p>On the first launch of a new installation, the app downloads Qwen3-ASR 0.6B separately, approximately 1.89 GB. Pause and resume the download in the app. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
     <p>New installations use Qwen3-ASR 0.6B with Smart Mix, automatic CPU selection and immediate paste. The app prepares recording and mode shortcuts and requests desktop consent for keyboard access. Existing user settings are preserved.</p>
+    <p>A penguin holding a microphone identifies the app, with a cobalt, amber and ivory glass interface. The icon contains no text.</p>
     <ul>
       <li>Edit, copy, retry, and translate Thai text into English</li>
       <li>Select your microphone and test its input level</li>
@@ -27,6 +28,9 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0~beta3" date="2026-09-12" type="development">
+      <description><p>A new text-free penguin microphone icon and a cobalt, amber and ivory glass interface. Automatic first-launch Qwen download, shortcut and paste consent setup, CPU defaults and GPU/NPU Beta warnings remain available. Existing settings are preserved.</p></description>
+    </release>
     <release version="2.0.0~beta2" date="2026-09-12" type="development">
       <description><p>Automatic first-launch Qwen model download with pause and resume, shortcut and paste consent setup, immediate paste for new installations, supported external model folder import, and clear GPU/NPU Beta warnings. Existing settings are preserved.</p></description>
     </release>
