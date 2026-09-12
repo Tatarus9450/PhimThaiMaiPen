@@ -76,5 +76,31 @@
     "application": 112,
     "status": "passed"
   },
-  "local_asr": "Not executed: available RAM below bounded preflight; CI runs public Thai and English FLEURS checks before publication."
+  "local_asr": "Not executed: available RAM below bounded preflight; CI runs public Thai and English FLEURS checks before publication.",
+  "package": {
+    "openvino": "2026.3.1-22476-759c5a6ab8c-releases/2026/3",
+    "devices": [
+      "CPU",
+      "GPU"
+    ],
+    "license_sources": 152,
+    "notice_files": 4174,
+    "experimental_binaries_bundled": false,
+    "device_detection_limit": "OpenVINO device enumeration is not an inference test on that device"
+  },
+  "isolated_installation": {
+    "status": "passed",
+    "installation": "private FLATPAK_USER_DIR; no global app replacement",
+    "launch_probe": "flatpak run --command=python3 imports packaged app and confirms factory defaults",
+    "ui_cases": 32,
+    "ui_geometry_issues": 0,
+    "fontconfig_match": "Noto Sans Thai"
+  },
+  "local_bundle": {
+    "bytes": 406054800,
+    "sha256": "5bdbdf837458de0d11c34537d8945cd07b1ac6aa282f2d34e245de2fe709860b",
+    "import": "passed",
+    "ostree_commit": "325716fd250d13054b422b648919f408a2d9a3caae1a633ce1845a793821f38c",
+    "provenance": "Local build; the separately built GitHub artifact has its own digest"
+  }
 }

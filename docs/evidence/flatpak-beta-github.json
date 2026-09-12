@@ -1,0 +1,176 @@
+{
+  "release_url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.1",
+  "published_at": "2026-09-12T06:00:48Z",
+  "draft": false,
+  "prerelease": true,
+  "tag": "v2.0.0-beta.1",
+  "workflow_url": "https://github.com/Tatarus9450/PhimThaiMaiPen/actions/runs/34675954504",
+  "workflow_conclusion": "success",
+  "public_assets": [
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-asr.json",
+      "bytes": 2876,
+      "sha256": "a94133e3e9c3f6a9a76b53f3591a48e83e54ddc6187e921ce4fc0e60ad2d79ee",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-asr.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-build.json",
+      "bytes": 420,
+      "sha256": "505a8d20cf7fe4b942a4e490119ec42111c46aecd3c9c4ed0ab4f88e9e82bc42",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-build.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-constraints.txt",
+      "bytes": 794,
+      "sha256": "86b2ebb89fc21cfde185d9f7c734eb0e8a11abdcfba3bb335a554ffba238bfcd",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-constraints.txt"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-manifest.json",
+      "bytes": 110006,
+      "sha256": "ff5cd0f49efa71ec84ec054d4f64549d191ec4f73ab419e4d00ebd9d51cd35a5",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-manifest.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-smoke.json",
+      "bytes": 208,
+      "sha256": "8206c7ff49f845d2e355e8e297751583239cbed390defb2b6336b63e6f7a7596",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-smoke.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64-wheels.json",
+      "bytes": 16603,
+      "sha256": "03a79106e3d65ed18fd76cae7dac661d23d1009153e718fe1c35cb120c856ece",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64-wheels.json"
+    },
+    {
+      "name": "PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak",
+      "bytes": 406093240,
+      "sha256": "d4368f470ace7dd2b042e749d338213971d525dbaa3983f3c2c91a74db7a1da5",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 109,
+      "sha256": "28afa84562fb18b433f22d011d9d3e0830cbb3d27158bed070f42568871a4645",
+      "url": "https://github.com/Tatarus9450/PhimThaiMaiPen/releases/download/v2.0.0-beta.1/SHA256SUMS"
+    }
+  ],
+  "download_verification": "All eight public assets downloaded independently and matched GitHub SHA256 digests; bundle also matched SHA256SUMS",
+  "build": {
+    "commit": "3ec06c4c1d0fd20d92e99d0b67c9c1f796642d49",
+    "sdk_commit": "94e029e5b32c7d8bb1a44ff4492eca273c9886e55e33d7dba273c75e678353ca",
+    "runtime_commit": "3adaa41de78d95076617f743099ec3851b5ae4fcdadbaaa8b7df1412c705c56c",
+    "architecture": "x86_64",
+    "branch": "beta",
+    "models_bundled": false,
+    "dependency_policy": "Pinned upstream wheels; source-patched Qt Multimedia and Qwen; not a Flathub submission"
+  },
+  "smoke": {
+    "version": "2.0.0b1",
+    "torch": "2.11.0+cpu",
+    "pyside": "6.11.1",
+    "default_model": "qwen-0.6b",
+    "profile": "smart",
+    "runtime_imports": "passed",
+    "real_desktop_audio_asr": "not tested by this headless smoke"
+  },
+  "asr": {
+    "status": "passed",
+    "stage": "complete",
+    "asr_requested": true,
+    "scope": "Packaged /app code, runtime-only, no GUI/audio capture/portal/clipboard/singleton. Temporary XDG state; read-only model and hash-pinned public audio. No transcript output.",
+    "runtime": "runtime/org.kde.Platform/x86_64/6.11",
+    "version": "2.0.0b1",
+    "defaults": {
+      "model": "qwen-0.6b",
+      "device": "auto",
+      "profile": "smart",
+      "language": "auto"
+    },
+    "source": {
+      "files_checked": 31,
+      "matches_checkout": true,
+      "aggregate_sha256": "6fa62d89267c3fb0f42741e024d7a5b83f93924679c8d8e7e58f2bdd5ad50cf2"
+    },
+    "dependencies": {
+      "requirements_checked": 129,
+      "failures": []
+    },
+    "versions": {
+      "PySide6": "6.11.1",
+      "shiboken6": "6.11.1",
+      "torch": "2.11.0+cpu",
+      "qwen-asr": "0.0.6",
+      "transformers": "4.57.6",
+      "dbus-next": "0.2.3",
+      "soundfile": "0.14.0"
+    },
+    "available_memory_mib": 14888,
+    "qt": {
+      "version": "6.11.1",
+      "audio_backend": "pulseaudio",
+      "audio_classes_imported": [
+        "QAudioSource",
+        "QAudioOutput",
+        "QMediaPlayer"
+      ],
+      "patched_library": true,
+      "ffmpeg_plugin": true
+    },
+    "ffmpeg": "ffmpeg version 7.1.3 Copyright (c) 2000-2025 the FFmpeg developers",
+    "model": {
+      "repository": "Qwen/Qwen3-ASR-0.6B",
+      "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+      "integrity_verified": true
+    },
+    "dataset": {
+      "name": "Google FLEURS",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/datasets/google/fleurs/tree/70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "limitation": "Two known public clips; functional smoke, not representative accuracy certification"
+    },
+    "samples": [
+      {
+        "file": "10026868752543983818.wav",
+        "sha256": "d774e3bb5370542c316ae458aa819900d2e0e9737ba9046804ee416ef7339de6",
+        "language": "Thai",
+        "device": "cpu",
+        "profile": "smart",
+        "characters": 77,
+        "transcript_sha256": "7f7105b539167c2f41953fa7b1c202207664799e567243f47ccf58ac38c72021",
+        "metric": "CER",
+        "errors": 2,
+        "reference_units": 75,
+        "error_rate": 0.02666666666666667,
+        "wall_seconds": 8.649,
+        "vad_applied": true,
+        "no_speech": false
+      },
+      {
+        "file": "1003119935936341070.wav",
+        "sha256": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+        "language": "English",
+        "device": "cpu",
+        "profile": "smart",
+        "characters": 103,
+        "transcript_sha256": "2226dab26de694e2bb52e0abacc19fa60d3023c75b6b6002aff32b2020615a64",
+        "metric": "WER",
+        "errors": 1,
+        "reference_units": 19,
+        "error_rate": 0.05263157894736842,
+        "wall_seconds": 3.971,
+        "vad_applied": true,
+        "no_speech": false
+      }
+    ],
+    "wall_seconds": 18.018,
+    "peak_rss_mib": 5841.0
+  },
+  "limits": [
+    "Two public audio clips are functional smoke tests, not a general accuracy certification",
+    "Desktop portal grants, global shortcuts and audible playback require per-desktop setup; existing native app was left running",
+    "Direct GitHub Flatpak beta, not Flathub publication or broad hardware certification"
+  ]
+}

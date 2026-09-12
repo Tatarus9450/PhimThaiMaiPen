@@ -17,6 +17,8 @@ Start the app, download the model, test the microphone and enable shortcuts/past
 
 Quit before installing an updated bundle. To return to an earlier beta bundle, use `flatpak install --user --reinstall ./earlier-version.flatpak`. Model/config data stays under `~/.var/app/io.github.tatarus9450.PhimThaiMaiPen/`; do not use `--delete-data` during rollback. Direct bundles do not provide an application update remote. Native and Flatpak have separate settings; run only one at a time to avoid competing shortcuts
 
+When migrating from the native KDE installation, quit the native app and release its Meta+H / Meta+Shift+H bindings in KDE System Settings → Keyboard → Shortcuts before enabling the Flatpak bindings. Native launcher shortcuts can remain active even after its window closes. The sandbox obtains its own portal permissions; existing native grants do not prove the Flatpak is authorized
+
 ## Local integration package
 
 `scripts/build-release-flatpak.sh` resolves wheels inside the KDE SDK, builds, exports and smoke-tests the beta bundle. GitHub Actions calls the same helper for release tags and attaches the bundle, SHA256 checksums, dependency provenance and verification output. `scripts/prepare-local-flatpak.py` prepares the offline manifest under `.cache/`. It includes wheel dependencies, source-built MIT Kerberos, source-patched Qt Multimedia and the same minimal Qwen source patch used by the native installer. This recipe is for direct GitHub distribution, not the final Flathub source recipe
