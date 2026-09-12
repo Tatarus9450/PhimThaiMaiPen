@@ -1,0 +1,140 @@
+name: Beta Flatpak release
+
+on:
+  push:
+    branches:
+      - 'release/v2.0.0-beta.*'
+    tags:
+      - 'v2.0.0-beta.*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish assets (select a matching beta tag or release/v2.0.0-beta.N branch)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flatpak-beta-publication
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate publication target
+        id: target
+        env:
+          PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          tag=$(python3 - <<'PY'
+          import re, tomllib
+          with open('pyproject.toml', 'rb') as stream:
+              version = tomllib.load(stream)['project']['version']
+          match = re.fullmatch(r'2\.0\.0b([1-9][0-9]*)', version)
+          if not match:
+              raise SystemExit('Expected a 2.0.0bN beta version')
+          print('v2.0.0-beta.' + match[1])
+          PY
+          )
+          if [[ "$PUBLISH" == true && "$GITHUB_REF_NAME" != "$tag" && "$GITHUB_REF_NAME" != "release/$tag" ]]; then
+            echo 'Publishing ref must match the beta version in pyproject.toml' >&2
+            exit 1
+          fi
+          test -f "docs/releases/${tag#v}.md"
+          existing=$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          resolved=$(python3 -c 'import sys; d=dict(line.split()[::-1] for line in sys.stdin if line.strip()); tag="refs/tags/"+sys.argv[1]; print(d.get(tag+"^{}",d.get(tag,"")))' "$tag" <<< "$existing")
+          if [[ -n "$resolved" && "$resolved" != "$GITHUB_SHA" ]]; then
+            echo 'The beta tag already points at another commit; choose a new version' >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Install Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak dbus-x11 desktop-file-utils appstream
+          # Ubuntu runner AppArmor otherwise prevents nested bwrap user namespaces.
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive -y flathub org.flatpak.Builder org.kde.Sdk//6.11 org.kde.Platform//6.11
+          flatpak update --user --noninteractive -y --commit=94e029e5b32c7d8bb1a44ff4492eca273c9886e55e33d7dba273c75e678353ca org.kde.Sdk//6.11
+          flatpak update --user --noninteractive -y --commit=3adaa41de78d95076617f743099ec3851b5ae4fcdadbaaa8b7df1412c705c56c org.kde.Platform//6.11
+          df -h .
+      - name: Validate desktop metadata
+        run: |
+          desktop-file-validate phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.desktop
+          appstreamcli validate --no-net phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.metainfo.xml
+      - name: Build and verify bundle
+        run: dbus-run-session -- bash scripts/build-release-flatpak.sh dist
+      - name: Preserve verified build assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: PhimThaiMaiPen-beta-x86_64
+          path: |
+            dist/PhimThaiMaiPen-*
+            dist/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Publish beta release
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          notes="docs/releases/${RELEASE_TAG#v}.md"
+          test -f "$notes"
+          tag_commit() {
+            git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" |
+              python3 -c 'import sys; d=dict(line.split()[::-1] for line in sys.stdin if line.strip()); tag="refs/tags/"+sys.argv[1]; print(d.get(tag+"^{}",d.get(tag,"")))' "$RELEASE_TAG"
+          }
+          # Recheck immediately before mutation; existing tags are never moved.
+          resolved=$(tag_commit)
+          if [[ -n "$resolved" && "$resolved" != "$GITHUB_SHA" ]]; then
+            echo 'Tag changed during the build; publication stopped' >&2
+            exit 1
+          fi
+          if [[ -z "$resolved" ]]; then
+            # A draft release may defer tag creation. Create the immutable ref
+            # explicitly only after build, offline ASR and bundle checks pass.
+            if ! gh api --method POST "repos/$GH_REPO/git/refs" \
+                -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" >/dev/null; then
+              # A simultaneous create is acceptable only for this exact commit.
+              resolved=$(tag_commit)
+              if [[ "$resolved" != "$GITHUB_SHA" ]]; then
+                echo 'Could not create the verified beta tag; publication stopped' >&2
+                exit 1
+              fi
+            fi
+          fi
+          if [[ $(tag_commit) != "$GITHUB_SHA" ]]; then
+            echo 'Beta tag does not match the verified commit; publication stopped' >&2
+            exit 1
+          fi
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft); then
+            if [[ "$draft" != true ]]; then
+              echo 'Release already published; use a new version tag instead of replacing public assets' >&2
+              exit 1
+            fi
+            # Resume a failed draft upload; published releases are never replaced.
+            gh release upload "$RELEASE_TAG" dist/PhimThaiMaiPen-* dist/SHA256SUMS --clobber
+            gh release edit "$RELEASE_TAG" --notes-file "$notes" --prerelease
+          else
+            gh release create "$RELEASE_TAG" dist/PhimThaiMaiPen-* dist/SHA256SUMS --verify-tag \
+              --draft --prerelease --title "PhimThaiMaiPen ${RELEASE_TAG#v}" --notes-file "$notes"
+          fi
+          resolved=$(tag_commit)
+          if [[ "$resolved" != "$GITHUB_SHA" ]]; then
+            echo 'Draft release tag does not match the verified commit; not publishing' >&2
+            exit 1
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease

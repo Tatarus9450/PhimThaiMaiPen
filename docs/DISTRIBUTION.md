@@ -1,21 +1,47 @@
-# Packaging experiments — deferred
+# Flatpak beta distribution
 
-Updated 2026-09-12. The user narrowed delivery to the native application and GitHub source publication. **Do not continue source-only packaging or submit to Flathub for this delivery.** The notes below preserve completed experiments and possible future work. Application ID `io.github.tatarus9450.PhimThaiMaiPen`, upstream <https://github.com/Tatarus9450/PhimThaiMaiPen>, initial architecture x86_64, KDE Platform/SDK 6.11. This is a development preview installed locally. It is **not published on Flathub**, and is not searchable from Discover through Flathub yet
+Updated 2026-09-12. Delivery now includes a versioned GitHub source release and a downloadable Flatpak beta. Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b1`; Git tag `v2.0.0-beta.1`. This direct-download preview is **not published on Flathub**. Discover can install the downloaded bundle; searching Flathub for the application will not find it yet
+
+## Install, update and rollback
+
+Download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.1). Verify with `sha256sum --check SHA256SUMS`, then open the bundle in Discover or run:
+
+```bash
+flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak
+flatpak run --branch=beta io.github.tatarus9450.PhimThaiMaiPen
+```
+
+The bundle points to Flathub for the KDE runtime. Runtime dependencies and models download separately. New settings use Qwen3-ASR 0.6B, automatic language/device selection, Smart Mix and review before paste. Qwen's pinned model revision is `5eb144179a02acc5e5ba31e748d22b0cf3e303b0` (~1.89 GB). Allow sufficient RAM for the desktop in addition to the measured 5.3–6 GB ASR peak. Model selection remains available; existing settings are preserved
+
+Start the app, download the model, test the microphone and enable shortcuts/paste in Settings. The desktop must grant portal permissions. Meta+H starts/stops recording; Meta+Shift+H cycles modes. Set immediate paste if desired. XWayland is needed for the small left-side popup on Wayland
+
+Quit before installing an updated bundle. To return to an earlier beta bundle, use `flatpak install --user --reinstall ./earlier-version.flatpak`. Model/config data stays under `~/.var/app/io.github.tatarus9450.PhimThaiMaiPen/`; do not use `--delete-data` during rollback. Direct bundles do not provide an application update remote. Native and Flatpak have separate settings; run only one at a time to avoid competing shortcuts
 
 ## Local integration package
 
-`scripts/prepare-local-flatpak.py` prepares the experimental manifest under `.cache/`. It includes the application, pinned wheel dependencies, source-built MIT Kerberos, source-patched Qt Multimedia and locally verified accelerator runtimes. The wheel/local-directory recipe is deliberately identified as an integration package; it is not the final Flathub source recipe
+`scripts/build-release-flatpak.sh` resolves wheels inside the KDE SDK, builds, exports and smoke-tests the beta bundle. GitHub Actions calls the same helper for release tags and attaches the bundle, SHA256 checksums, dependency provenance and verification output. `scripts/prepare-local-flatpak.py` prepares the offline manifest under `.cache/`. It includes wheel dependencies, source-built MIT Kerberos, source-patched Qt Multimedia and the same minimal Qwen source patch used by the native installer. This recipe is for direct GitHub distribution, not the final Flathub source recipe
 
 ```bash
-.venv/bin/python scripts/prepare-local-flatpak.py
-flatpak run org.flatpak.Builder --user --install --force-clean \
-  .cache/flatpak-build .cache/io.github.tatarus9450.PhimThaiMaiPen.local.json
-flatpak run io.github.tatarus9450.PhimThaiMaiPen
+# Clean release build (Flatpak, Builder and KDE SDK required)
+bash scripts/build-release-flatpak.sh
+
+# Reuse wheels already resolved in the KDE SDK
+python3 scripts/prepare-local-flatpak.py
+flatpak run org.flatpak.Builder --user --force-clean \
+  --repo=.cache/flatpak-release-repo .cache/flatpak-release-build \
+  .cache/io.github.tatarus9450.PhimThaiMaiPen.local.json
+mkdir -p dist
+flatpak build-bundle --arch=x86_64 \
+  --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak \
+  io.github.tatarus9450.PhimThaiMaiPen beta
 ```
 
-Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Default permissions are Wayland, fallback X11, IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
+Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Permissions are Wayland, X11 (also under Wayland for the XCB popup), IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
 
-## Verified integration
+The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
+
+## Historical integration evidence
 
 | Behavior | Evidence and limits |
 | --- | --- |
@@ -49,7 +75,7 @@ The application uses [Global Shortcuts](https://flatpak.github.io/xdg-desktop-po
 
 Current documented [Flatpak permissions](https://docs.flatpak.org/en/latest/sandbox-permissions.html) have no dedicated accelerator-only `accel` permission. `--device=all` is broader than the standard app needs and stays outside the default package. It does not install a host driver or guarantee working ASR. A distributable NPU route needs explicit permission/runtime review; the app must retain a self-contained CPU route
 
-## Remaining release acceptance
+## Remaining Flathub acceptance
 
 1. Finish source dependency/runtime closure and preserve all corresponding license notices
 2. Run the clean offline source build, installed model/audio/desktop regression checks, Flatpak manifest/repository lint and AppStream/desktop validation

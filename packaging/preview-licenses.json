@@ -1,0 +1,1083 @@
+{
+  "name": "preview-wheel-notices",
+  "buildsystem": "simple",
+  "build-commands": [
+    "python3 collect-preview-licenses.py --prefix /app/share/licenses/phimthai-preview"
+  ],
+  "sources": [
+    {
+      "type": "inline",
+      "dest-filename": "collect-preview-licenses.py",
+      "contents": "#!/usr/bin/env python3\n\"\"\"Copy upstream notices without extracting/building complete source archives.\"\"\"\nimport argparse\nimport hashlib\nimport json\nfrom pathlib import Path, PurePosixPath\nimport posixpath\nimport re\nimport tarfile\n\nNOTICE = re.compile(r\"(^|[._-])(licen[sc]e|copying|copyright|notice|authors)([._-]|$)\", re.I)\nSPECIAL = {\"qt_attribution.json\", \"README.chromium\", \"REUSE.toml\", \"dep5\"}\n\n\ndef digest(path):\n    result = hashlib.sha256()\n    with path.open(\"rb\") as stream:\n        for block in iter(lambda: stream.read(1024 * 1024), b\"\"):\n            result.update(block)\n    return result.hexdigest()\n\n\ndef safe_name(name):\n    name = posixpath.normpath(name)\n    if name.startswith(\"/\") or name == \"..\" or name.startswith(\"../\"):\n        raise ValueError(\"Unsafe upstream notice path\")\n    return name\n\n\ndef notice_path(name):\n    path = PurePosixPath(name)\n    return (bool(NOTICE.search(path.name)) or path.name in SPECIAL\n            or any(part.lower() in {\"licenses\", \"licences\", \"copyrights\"} for part in path.parts))\n\n\ndef references(name, data):\n    \"\"\"Honor Qt's explicit license filenames, including uncommon filenames.\"\"\"\n    if PurePosixPath(name).name != \"qt_attribution.json\":\n        return []\n    entries = json.loads(data, strict=False)\n    if isinstance(entries, dict):\n        entries = [entries]\n    found = []\n    for entry in entries:\n        if not isinstance(entry, dict):\n            continue\n        example_only = bool(entry.get(\"QtParts\")) and set(entry[\"QtParts\"]) <= {\"examples\", \"tests\", \"tools\"}\n        for field in (\"LicenseFile\", \"LicenseFiles\"):\n            values = entry.get(field, [])\n            values = [values] if isinstance(values, str) else values\n            for value in values or []:\n                if value:\n                    found.append((safe_name(posixpath.join(posixpath.dirname(name), value)), example_only))\n    return found\n\n\ndef collect_archive(archive, destination):\n    written, wanted, links = {}, {}, {}\n\n    def copy(member, stream):\n        name = safe_name(member.name)\n        data = stream.read()\n        target = destination / name\n        target.parent.mkdir(parents=True, exist_ok=True)\n        target.write_bytes(data)\n        written[name] = hashlib.sha256(data).hexdigest()\n        for reference, example_only in references(name, data):\n            wanted[reference] = wanted.get(reference, True) and example_only\n\n    # Streaming mode keeps the ~1 GiB Qt archive compressed on disk. No extractall.\n    with tarfile.open(archive, mode=\"r|*\") as source:\n        for member in source:\n            if member.issym() or member.islnk():\n                target = member.linkname if member.islnk() else posixpath.join(posixpath.dirname(member.name), member.linkname)\n                try:\n                    links[safe_name(member.name)] = safe_name(target)\n                except ValueError:\n                    # An unrelated test symlink may point outside its source tree.\n                    continue\n                if notice_path(member.name):\n                    wanted[safe_name(member.name)] = False\n            elif member.isfile() and notice_path(member.name):\n                copy(member, source.extractfile(member))\n    pending = set(wanted) - set(written)\n    aliases = {name: links[name] for name in pending if name in links}\n    pending |= set(aliases.values())\n    if pending:\n        with tarfile.open(archive, mode=\"r|*\") as source:\n            for member in source:\n                if member.isfile() and safe_name(member.name) in pending:\n                    copy(member, source.extractfile(member))\n        for name, target in aliases.items():\n            if target in written:\n                data = (destination / target).read_bytes()\n                output = destination / name\n                output.parent.mkdir(parents=True, exist_ok=True)\n                output.write_bytes(data)\n                written[name] = hashlib.sha256(data).hexdigest()\n    unresolved = sorted(name for name in wanted if name not in written)\n    required_missing = [name for name in unresolved if not wanted[name]]\n    if not written:\n        raise RuntimeError(f\"No upstream notices found: {archive.name}\")\n    return {\"files\": written, \"unresolved_references\": unresolved,\n            \"required_missing\": required_missing}\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"--prefix\", type=Path, required=True)\n    parser.add_argument(\"--records\", type=Path, default=Path(\"notice-sources.json\"))\n    args = parser.parse_args()\n    records = json.loads(args.records.read_text())\n    args.prefix.mkdir(parents=True, exist_ok=True)\n    report = {\"scope\": \"Upstream source notices (superset), not a linked-code SBOM. Other wheel notices remain in their dist-info/licenses. Source URLs and SHA256 checksums are retained for review/retrieval.\", \"sources\": []}\n    failed = []\n    for record in records:\n        archive = Path(\"notice-sources\") / record[\"filename\"]\n        if digest(archive) != record[\"sha256\"]:\n            raise RuntimeError(f\"Notice source checksum mismatch: {record['id']}\")\n        destination = args.prefix / record[\"id\"]\n        if record.get(\"kind\") == \"license-file\":\n            destination.mkdir(parents=True, exist_ok=True)\n            data = archive.read_bytes()\n            (destination / \"LICENSE\").write_bytes(data)\n            collected = {\"files\": {\"LICENSE\": hashlib.sha256(data).hexdigest()}, \"unresolved_references\": [], \"required_missing\": []}\n        else:\n            collected = collect_archive(archive, destination)\n        report[\"sources\"].append({**record, **collected})\n        failed.extend(f\"{record['id']}/{name}\" for name in collected[\"required_missing\"])\n        print(f\"{record['id']}: {len(collected['files'])} notice files\", flush=True)\n    (args.prefix / \"SOURCES.json\").write_text(json.dumps(report, indent=2) + \"\\n\")\n    (args.prefix / \"README.txt\").write_text(\"PhimThaiMaiPen preview includes dynamically linked Qt/PySide 6.11.1.\\nPySide/Shiboken are available under LGPL-3.0-only or their stated alternatives. Each bundled Qt module and third-party component retains the license in its own notices.\\nThe Qt wheel also includes ICU 73.2 and FFmpeg 7.1.3; the latter's notices are in qtmultimedia/src/3rdparty/ffmpeg within the Qt source notice tree.\\nThe app's Qt Multimedia patch and build instructions are available in the same versioned GitHub source release.\\nSOURCES.json records original source URLs, exact checksums and copied notice paths.\\nThis is a source-notice superset; unused source components may appear.\\n\")\n    if failed:\n        raise RuntimeError(\"Unresolved upstream runtime license references: \" + \", \".join(failed[:20]))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "type": "inline",
+      "dest-filename": "notice-sources.json",
+      "contents": "[\n  {\n    \"id\": \"qt-6.11.1\",\n    \"filename\": \"qt-6.11.1.source\",\n    \"url\": \"https://download.qt.io/official_releases/qt/6.11/6.11.1/single/qt-everywhere-src-6.11.1.tar.xz\",\n    \"sha256\": \"252acef8c5ae68074d91cadba2ee4a83465051bbb970dd26e8f0daa0f3904e03\"\n  },\n  {\n    \"id\": \"pyside-6.11.1\",\n    \"filename\": \"pyside-6.11.1.source\",\n    \"url\": \"https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.1-src/pyside-setup-everywhere-src-6.11.1.tar.xz\",\n    \"sha256\": \"6ffd9835bb0dd2c56f061d62f1616bb1707cfc0202b80e3165d6be087f3965e2\"\n  },\n  {\n    \"id\": \"icu-73.2\",\n    \"filename\": \"icu-73.2.LICENSE\",\n    \"url\": \"https://raw.githubusercontent.com/unicode-org/icu/680f521746a3bd6a86f25f25ee50a62d88b489cf/icu4c/LICENSE\",\n    \"sha256\": \"f3005e195ff74d8812cc1f182a1c446fab678d70a10e3dada497585befee5416\",\n    \"kind\": \"license-file\"\n  },\n  {\n    \"id\": \"sentencepiece-0.2.2\",\n    \"filename\": \"sentencepiece-0.2.2.source\",\n    \"url\": \"https://files.pythonhosted.org/packages/cc/33/ea3cb3839607eb175da835244a798f797f478c5ddf0e8ecdf57ea85a4c70/sentencepiece-0.2.2.tar.gz\",\n    \"sha256\": \"3d2b5e824b5622038dc7b490897efe05ebbbb9e7350fc142f3ecc8789ef9bdf6\"\n  },\n  {\n    \"id\": \"tokenizers-0.22.2\",\n    \"filename\": \"tokenizers-0.22.2.source\",\n    \"url\": \"https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz\",\n    \"sha256\": \"473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-ahash-0.8.12\",\n    \"filename\": \"tokenizers-vendor-ahash-0.8.12.source\",\n    \"url\": \"https://static.crates.io/crates/ahash/ahash-0.8.12.crate\",\n    \"sha256\": \"5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-aho-corasick-1.1.4\",\n    \"filename\": \"tokenizers-vendor-aho-corasick-1.1.4.source\",\n    \"url\": \"https://static.crates.io/crates/aho-corasick/aho-corasick-1.1.4.crate\",\n    \"sha256\": \"ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-anstream-0.6.21\",\n    \"filename\": \"tokenizers-vendor-anstream-0.6.21.source\",\n    \"url\": \"https://static.crates.io/crates/anstream/anstream-0.6.21.crate\",\n    \"sha256\": \"43d5b281e737544384e969a5ccad3f1cdd24b48086a0fc1b2a5262a26b8f4f4a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-anstyle-1.0.13\",\n    \"filename\": \"tokenizers-vendor-anstyle-1.0.13.source\",\n    \"url\": \"https://static.crates.io/crates/anstyle/anstyle-1.0.13.crate\",\n    \"sha256\": \"5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-anstyle-parse-0.2.7\",\n    \"filename\": \"tokenizers-vendor-anstyle-parse-0.2.7.source\",\n    \"url\": \"https://static.crates.io/crates/anstyle-parse/anstyle-parse-0.2.7.crate\",\n    \"sha256\": \"4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-anstyle-query-1.1.5\",\n    \"filename\": \"tokenizers-vendor-anstyle-query-1.1.5.source\",\n    \"url\": \"https://static.crates.io/crates/anstyle-query/anstyle-query-1.1.5.crate\",\n    \"sha256\": \"40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-anstyle-wincon-3.0.11\",\n    \"filename\": \"tokenizers-vendor-anstyle-wincon-3.0.11.source\",\n    \"url\": \"https://static.crates.io/crates/anstyle-wincon/anstyle-wincon-3.0.11.crate\",\n    \"sha256\": \"291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-autocfg-1.5.0\",\n    \"filename\": \"tokenizers-vendor-autocfg-1.5.0.source\",\n    \"url\": \"https://static.crates.io/crates/autocfg/autocfg-1.5.0.crate\",\n    \"sha256\": \"c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-base64-0.13.1\",\n    \"filename\": \"tokenizers-vendor-base64-0.13.1.source\",\n    \"url\": \"https://static.crates.io/crates/base64/base64-0.13.1.crate\",\n    \"sha256\": \"9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-bitflags-2.10.0\",\n    \"filename\": \"tokenizers-vendor-bitflags-2.10.0.source\",\n    \"url\": \"https://static.crates.io/crates/bitflags/bitflags-2.10.0.crate\",\n    \"sha256\": \"812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-bumpalo-3.19.0\",\n    \"filename\": \"tokenizers-vendor-bumpalo-3.19.0.source\",\n    \"url\": \"https://static.crates.io/crates/bumpalo/bumpalo-3.19.0.crate\",\n    \"sha256\": \"46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-castaway-0.2.4\",\n    \"filename\": \"tokenizers-vendor-castaway-0.2.4.source\",\n    \"url\": \"https://static.crates.io/crates/castaway/castaway-0.2.4.crate\",\n    \"sha256\": \"dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-cc-1.2.48\",\n    \"filename\": \"tokenizers-vendor-cc-1.2.48.source\",\n    \"url\": \"https://static.crates.io/crates/cc/cc-1.2.48.crate\",\n    \"sha256\": \"c481bdbf0ed3b892f6f806287d72acd515b352a4ec27a208489b8c1bc839633a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-cfg-if-1.0.4\",\n    \"filename\": \"tokenizers-vendor-cfg-if-1.0.4.source\",\n    \"url\": \"https://static.crates.io/crates/cfg-if/cfg-if-1.0.4.crate\",\n    \"sha256\": \"9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-colorchoice-1.0.4\",\n    \"filename\": \"tokenizers-vendor-colorchoice-1.0.4.source\",\n    \"url\": \"https://static.crates.io/crates/colorchoice/colorchoice-1.0.4.crate\",\n    \"sha256\": \"b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-compact_str-0.9.0\",\n    \"filename\": \"tokenizers-vendor-compact_str-0.9.0.source\",\n    \"url\": \"https://static.crates.io/crates/compact_str/compact_str-0.9.0.crate\",\n    \"sha256\": \"3fdb1325a1cece981e8a296ab8f0f9b63ae357bd0784a9faaf548cc7b480707a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-console-0.16.1\",\n    \"filename\": \"tokenizers-vendor-console-0.16.1.source\",\n    \"url\": \"https://static.crates.io/crates/console/console-0.16.1.crate\",\n    \"sha256\": \"b430743a6eb14e9764d4260d4c0d8123087d504eeb9c48f2b2a5e810dd369df4\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-crossbeam-deque-0.8.6\",\n    \"filename\": \"tokenizers-vendor-crossbeam-deque-0.8.6.source\",\n    \"url\": \"https://static.crates.io/crates/crossbeam-deque/crossbeam-deque-0.8.6.crate\",\n    \"sha256\": \"9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-crossbeam-epoch-0.9.18\",\n    \"filename\": \"tokenizers-vendor-crossbeam-epoch-0.9.18.source\",\n    \"url\": \"https://static.crates.io/crates/crossbeam-epoch/crossbeam-epoch-0.9.18.crate\",\n    \"sha256\": \"5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-crossbeam-utils-0.8.21\",\n    \"filename\": \"tokenizers-vendor-crossbeam-utils-0.8.21.source\",\n    \"url\": \"https://static.crates.io/crates/crossbeam-utils/crossbeam-utils-0.8.21.crate\",\n    \"sha256\": \"d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-darling-0.20.11\",\n    \"filename\": \"tokenizers-vendor-darling-0.20.11.source\",\n    \"url\": \"https://static.crates.io/crates/darling/darling-0.20.11.crate\",\n    \"sha256\": \"fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-darling_core-0.20.11\",\n    \"filename\": \"tokenizers-vendor-darling_core-0.20.11.source\",\n    \"url\": \"https://static.crates.io/crates/darling_core/darling_core-0.20.11.crate\",\n    \"sha256\": \"0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-darling_macro-0.20.11\",\n    \"filename\": \"tokenizers-vendor-darling_macro-0.20.11.source\",\n    \"url\": \"https://static.crates.io/crates/darling_macro/darling_macro-0.20.11.crate\",\n    \"sha256\": \"fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-dary_heap-0.3.8\",\n    \"filename\": \"tokenizers-vendor-dary_heap-0.3.8.source\",\n    \"url\": \"https://static.crates.io/crates/dary_heap/dary_heap-0.3.8.crate\",\n    \"sha256\": \"06d2e3287df1c007e74221c49ca10a95d557349e54b3a75dc2fb14712c751f04\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-derive_builder-0.20.2\",\n    \"filename\": \"tokenizers-vendor-derive_builder-0.20.2.source\",\n    \"url\": \"https://static.crates.io/crates/derive_builder/derive_builder-0.20.2.crate\",\n    \"sha256\": \"507dfb09ea8b7fa618fcf76e953f4f5e192547945816d5358edffe39f6f94947\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-derive_builder_core-0.20.2\",\n    \"filename\": \"tokenizers-vendor-derive_builder_core-0.20.2.source\",\n    \"url\": \"https://static.crates.io/crates/derive_builder_core/derive_builder_core-0.20.2.crate\",\n    \"sha256\": \"2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-derive_builder_macro-0.20.2\",\n    \"filename\": \"tokenizers-vendor-derive_builder_macro-0.20.2.source\",\n    \"url\": \"https://static.crates.io/crates/derive_builder_macro/derive_builder_macro-0.20.2.crate\",\n    \"sha256\": \"ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-either-1.15.0\",\n    \"filename\": \"tokenizers-vendor-either-1.15.0.source\",\n    \"url\": \"https://static.crates.io/crates/either/either-1.15.0.crate\",\n    \"sha256\": \"48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-encode_unicode-1.0.0\",\n    \"filename\": \"tokenizers-vendor-encode_unicode-1.0.0.source\",\n    \"url\": \"https://static.crates.io/crates/encode_unicode/encode_unicode-1.0.0.crate\",\n    \"sha256\": \"34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-env_filter-0.1.4\",\n    \"filename\": \"tokenizers-vendor-env_filter-0.1.4.source\",\n    \"url\": \"https://static.crates.io/crates/env_filter/env_filter-0.1.4.crate\",\n    \"sha256\": \"1bf3c259d255ca70051b30e2e95b5446cdb8949ac4cd22c0d7fd634d89f568e2\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-env_logger-0.11.8\",\n    \"filename\": \"tokenizers-vendor-env_logger-0.11.8.source\",\n    \"url\": \"https://static.crates.io/crates/env_logger/env_logger-0.11.8.crate\",\n    \"sha256\": \"13c863f0904021b108aa8b2f55046443e6b1ebde8fd4a15c399893aae4fa069f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-errno-0.3.14\",\n    \"filename\": \"tokenizers-vendor-errno-0.3.14.source\",\n    \"url\": \"https://static.crates.io/crates/errno/errno-0.3.14.crate\",\n    \"sha256\": \"39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-esaxx-rs-0.1.10\",\n    \"filename\": \"tokenizers-vendor-esaxx-rs-0.1.10.source\",\n    \"url\": \"https://static.crates.io/crates/esaxx-rs/esaxx-rs-0.1.10.crate\",\n    \"sha256\": \"d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-fastrand-2.3.0\",\n    \"filename\": \"tokenizers-vendor-fastrand-2.3.0.source\",\n    \"url\": \"https://static.crates.io/crates/fastrand/fastrand-2.3.0.crate\",\n    \"sha256\": \"37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-find-msvc-tools-0.1.5\",\n    \"filename\": \"tokenizers-vendor-find-msvc-tools-0.1.5.source\",\n    \"url\": \"https://static.crates.io/crates/find-msvc-tools/find-msvc-tools-0.1.5.crate\",\n    \"sha256\": \"3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-fnv-1.0.7\",\n    \"filename\": \"tokenizers-vendor-fnv-1.0.7.source\",\n    \"url\": \"https://static.crates.io/crates/fnv/fnv-1.0.7.crate\",\n    \"sha256\": \"3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures/futures-0.3.31.crate\",\n    \"sha256\": \"65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-channel-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-channel-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-channel/futures-channel-0.3.31.crate\",\n    \"sha256\": \"2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-core-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-core-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-core/futures-core-0.3.31.crate\",\n    \"sha256\": \"05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-executor-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-executor-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-executor/futures-executor-0.3.31.crate\",\n    \"sha256\": \"1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-io-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-io-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-io/futures-io-0.3.31.crate\",\n    \"sha256\": \"9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-macro-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-macro-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-macro/futures-macro-0.3.31.crate\",\n    \"sha256\": \"162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-sink-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-sink-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-sink/futures-sink-0.3.31.crate\",\n    \"sha256\": \"e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-task-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-task-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-task/futures-task-0.3.31.crate\",\n    \"sha256\": \"f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-futures-util-0.3.31\",\n    \"filename\": \"tokenizers-vendor-futures-util-0.3.31.source\",\n    \"url\": \"https://static.crates.io/crates/futures-util/futures-util-0.3.31.crate\",\n    \"sha256\": \"9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-getrandom-0.3.4\",\n    \"filename\": \"tokenizers-vendor-getrandom-0.3.4.source\",\n    \"url\": \"https://static.crates.io/crates/getrandom/getrandom-0.3.4.crate\",\n    \"sha256\": \"899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-heck-0.5.0\",\n    \"filename\": \"tokenizers-vendor-heck-0.5.0.source\",\n    \"url\": \"https://static.crates.io/crates/heck/heck-0.5.0.crate\",\n    \"sha256\": \"2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-ident_case-1.0.1\",\n    \"filename\": \"tokenizers-vendor-ident_case-1.0.1.source\",\n    \"url\": \"https://static.crates.io/crates/ident_case/ident_case-1.0.1.crate\",\n    \"sha256\": \"b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-indicatif-0.18.3\",\n    \"filename\": \"tokenizers-vendor-indicatif-0.18.3.source\",\n    \"url\": \"https://static.crates.io/crates/indicatif/indicatif-0.18.3.crate\",\n    \"sha256\": \"9375e112e4b463ec1b1c6c011953545c65a30164fbab5b581df32b3abf0dcb88\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-indoc-2.0.7\",\n    \"filename\": \"tokenizers-vendor-indoc-2.0.7.source\",\n    \"url\": \"https://static.crates.io/crates/indoc/indoc-2.0.7.crate\",\n    \"sha256\": \"79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-is_terminal_polyfill-1.70.2\",\n    \"filename\": \"tokenizers-vendor-is_terminal_polyfill-1.70.2.source\",\n    \"url\": \"https://static.crates.io/crates/is_terminal_polyfill/is_terminal_polyfill-1.70.2.crate\",\n    \"sha256\": \"a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-itertools-0.14.0\",\n    \"filename\": \"tokenizers-vendor-itertools-0.14.0.source\",\n    \"url\": \"https://static.crates.io/crates/itertools/itertools-0.14.0.crate\",\n    \"sha256\": \"2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-itoa-1.0.15\",\n    \"filename\": \"tokenizers-vendor-itoa-1.0.15.source\",\n    \"url\": \"https://static.crates.io/crates/itoa/itoa-1.0.15.crate\",\n    \"sha256\": \"4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-jiff-0.2.16\",\n    \"filename\": \"tokenizers-vendor-jiff-0.2.16.source\",\n    \"url\": \"https://static.crates.io/crates/jiff/jiff-0.2.16.crate\",\n    \"sha256\": \"49cce2b81f2098e7e3efc35bc2e0a6b7abec9d34128283d7a26fa8f32a6dbb35\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-jiff-static-0.2.16\",\n    \"filename\": \"tokenizers-vendor-jiff-static-0.2.16.source\",\n    \"url\": \"https://static.crates.io/crates/jiff-static/jiff-static-0.2.16.crate\",\n    \"sha256\": \"980af8b43c3ad5d8d349ace167ec8170839f753a42d233ba19e08afe1850fa69\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-js-sys-0.3.83\",\n    \"filename\": \"tokenizers-vendor-js-sys-0.3.83.source\",\n    \"url\": \"https://static.crates.io/crates/js-sys/js-sys-0.3.83.crate\",\n    \"sha256\": \"464a3709c7f55f1f721e5389aa6ea4e3bc6aba669353300af094b29ffbdde1d8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-libc-0.2.177\",\n    \"filename\": \"tokenizers-vendor-libc-0.2.177.source\",\n    \"url\": \"https://static.crates.io/crates/libc/libc-0.2.177.crate\",\n    \"sha256\": \"2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-linux-raw-sys-0.11.0\",\n    \"filename\": \"tokenizers-vendor-linux-raw-sys-0.11.0.source\",\n    \"url\": \"https://static.crates.io/crates/linux-raw-sys/linux-raw-sys-0.11.0.crate\",\n    \"sha256\": \"df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-log-0.4.28\",\n    \"filename\": \"tokenizers-vendor-log-0.4.28.source\",\n    \"url\": \"https://static.crates.io/crates/log/log-0.4.28.crate\",\n    \"sha256\": \"34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-macro_rules_attribute-0.2.2\",\n    \"filename\": \"tokenizers-vendor-macro_rules_attribute-0.2.2.source\",\n    \"url\": \"https://static.crates.io/crates/macro_rules_attribute/macro_rules_attribute-0.2.2.crate\",\n    \"sha256\": \"65049d7923698040cd0b1ddcced9b0eb14dd22c5f86ae59c3740eab64a676520\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-macro_rules_attribute-proc_macro-0.2.2\",\n    \"filename\": \"tokenizers-vendor-macro_rules_attribute-proc_macro-0.2.2.source\",\n    \"url\": \"https://static.crates.io/crates/macro_rules_attribute-proc_macro/macro_rules_attribute-proc_macro-0.2.2.crate\",\n    \"sha256\": \"670fdfda89751bc4a84ac13eaa63e205cf0fd22b4c9a5fbfa085b63c1f1d3a30\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-matrixmultiply-0.3.10\",\n    \"filename\": \"tokenizers-vendor-matrixmultiply-0.3.10.source\",\n    \"url\": \"https://static.crates.io/crates/matrixmultiply/matrixmultiply-0.3.10.crate\",\n    \"sha256\": \"a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-memchr-2.7.6\",\n    \"filename\": \"tokenizers-vendor-memchr-2.7.6.source\",\n    \"url\": \"https://static.crates.io/crates/memchr/memchr-2.7.6.crate\",\n    \"sha256\": \"f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-memoffset-0.9.1\",\n    \"filename\": \"tokenizers-vendor-memoffset-0.9.1.source\",\n    \"url\": \"https://static.crates.io/crates/memoffset/memoffset-0.9.1.crate\",\n    \"sha256\": \"488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-minimal-lexical-0.2.1\",\n    \"filename\": \"tokenizers-vendor-minimal-lexical-0.2.1.source\",\n    \"url\": \"https://static.crates.io/crates/minimal-lexical/minimal-lexical-0.2.1.crate\",\n    \"sha256\": \"68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-mio-1.1.0\",\n    \"filename\": \"tokenizers-vendor-mio-1.1.0.source\",\n    \"url\": \"https://static.crates.io/crates/mio/mio-1.1.0.crate\",\n    \"sha256\": \"69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-monostate-0.1.18\",\n    \"filename\": \"tokenizers-vendor-monostate-0.1.18.source\",\n    \"url\": \"https://static.crates.io/crates/monostate/monostate-0.1.18.crate\",\n    \"sha256\": \"3341a273f6c9d5bef1908f17b7267bbab0e95c9bf69a0d4dcf8e9e1b2c76ef67\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-monostate-impl-0.1.18\",\n    \"filename\": \"tokenizers-vendor-monostate-impl-0.1.18.source\",\n    \"url\": \"https://static.crates.io/crates/monostate-impl/monostate-impl-0.1.18.crate\",\n    \"sha256\": \"e4db6d5580af57bf992f59068d4ea26fd518574ff48d7639b255a36f9de6e7e9\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-ndarray-0.16.1\",\n    \"filename\": \"tokenizers-vendor-ndarray-0.16.1.source\",\n    \"url\": \"https://static.crates.io/crates/ndarray/ndarray-0.16.1.crate\",\n    \"sha256\": \"882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-nom-7.1.3\",\n    \"filename\": \"tokenizers-vendor-nom-7.1.3.source\",\n    \"url\": \"https://static.crates.io/crates/nom/nom-7.1.3.crate\",\n    \"sha256\": \"d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-num-complex-0.4.6\",\n    \"filename\": \"tokenizers-vendor-num-complex-0.4.6.source\",\n    \"url\": \"https://static.crates.io/crates/num-complex/num-complex-0.4.6.crate\",\n    \"sha256\": \"73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-num-integer-0.1.46\",\n    \"filename\": \"tokenizers-vendor-num-integer-0.1.46.source\",\n    \"url\": \"https://static.crates.io/crates/num-integer/num-integer-0.1.46.crate\",\n    \"sha256\": \"7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-num-traits-0.2.19\",\n    \"filename\": \"tokenizers-vendor-num-traits-0.2.19.source\",\n    \"url\": \"https://static.crates.io/crates/num-traits/num-traits-0.2.19.crate\",\n    \"sha256\": \"071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-numpy-0.26.0\",\n    \"filename\": \"tokenizers-vendor-numpy-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/numpy/numpy-0.26.0.crate\",\n    \"sha256\": \"9b2dba356160b54f5371b550575b78130a54718b4c6e46b3f33a6da74a27e78b\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-once_cell-1.21.3\",\n    \"filename\": \"tokenizers-vendor-once_cell-1.21.3.source\",\n    \"url\": \"https://static.crates.io/crates/once_cell/once_cell-1.21.3.crate\",\n    \"sha256\": \"42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-once_cell_polyfill-1.70.2\",\n    \"filename\": \"tokenizers-vendor-once_cell_polyfill-1.70.2.source\",\n    \"url\": \"https://static.crates.io/crates/once_cell_polyfill/once_cell_polyfill-1.70.2.crate\",\n    \"sha256\": \"384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-onig-6.5.1\",\n    \"filename\": \"tokenizers-vendor-onig-6.5.1.source\",\n    \"url\": \"https://static.crates.io/crates/onig/onig-6.5.1.crate\",\n    \"sha256\": \"336b9c63443aceef14bea841b899035ae3abe89b7c486aaf4c5bd8aafedac3f0\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-onig_sys-69.9.1\",\n    \"filename\": \"tokenizers-vendor-onig_sys-69.9.1.source\",\n    \"url\": \"https://static.crates.io/crates/onig_sys/onig_sys-69.9.1.crate\",\n    \"sha256\": \"c7f86c6eef3d6df15f23bcfb6af487cbd2fed4e5581d58d5bf1f5f8b7f6727dc\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-paste-1.0.15\",\n    \"filename\": \"tokenizers-vendor-paste-1.0.15.source\",\n    \"url\": \"https://static.crates.io/crates/paste/paste-1.0.15.crate\",\n    \"sha256\": \"57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pin-project-lite-0.2.16\",\n    \"filename\": \"tokenizers-vendor-pin-project-lite-0.2.16.source\",\n    \"url\": \"https://static.crates.io/crates/pin-project-lite/pin-project-lite-0.2.16.crate\",\n    \"sha256\": \"3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pin-utils-0.1.0\",\n    \"filename\": \"tokenizers-vendor-pin-utils-0.1.0.source\",\n    \"url\": \"https://static.crates.io/crates/pin-utils/pin-utils-0.1.0.crate\",\n    \"sha256\": \"8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pkg-config-0.3.32\",\n    \"filename\": \"tokenizers-vendor-pkg-config-0.3.32.source\",\n    \"url\": \"https://static.crates.io/crates/pkg-config/pkg-config-0.3.32.crate\",\n    \"sha256\": \"7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-portable-atomic-1.11.1\",\n    \"filename\": \"tokenizers-vendor-portable-atomic-1.11.1.source\",\n    \"url\": \"https://static.crates.io/crates/portable-atomic/portable-atomic-1.11.1.crate\",\n    \"sha256\": \"f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-portable-atomic-util-0.2.4\",\n    \"filename\": \"tokenizers-vendor-portable-atomic-util-0.2.4.source\",\n    \"url\": \"https://static.crates.io/crates/portable-atomic-util/portable-atomic-util-0.2.4.crate\",\n    \"sha256\": \"d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-ppv-lite86-0.2.21\",\n    \"filename\": \"tokenizers-vendor-ppv-lite86-0.2.21.source\",\n    \"url\": \"https://static.crates.io/crates/ppv-lite86/ppv-lite86-0.2.21.crate\",\n    \"sha256\": \"85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-proc-macro2-1.0.103\",\n    \"filename\": \"tokenizers-vendor-proc-macro2-1.0.103.source\",\n    \"url\": \"https://static.crates.io/crates/proc-macro2/proc-macro2-1.0.103.crate\",\n    \"sha256\": \"5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3/pyo3-0.26.0.crate\",\n    \"sha256\": \"7ba0117f4212101ee6544044dae45abe1083d30ce7b29c4b5cbdfa2354e07383\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-async-runtimes-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-async-runtimes-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3-async-runtimes/pyo3-async-runtimes-0.26.0.crate\",\n    \"sha256\": \"e6ee6d4cb3e8d5b925f5cdb38da183e0ff18122eb2048d4041c9e7034d026e23\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-build-config-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-build-config-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3-build-config/pyo3-build-config-0.26.0.crate\",\n    \"sha256\": \"4fc6ddaf24947d12a9aa31ac65431fb1b851b8f4365426e182901eabfb87df5f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-ffi-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-ffi-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3-ffi/pyo3-ffi-0.26.0.crate\",\n    \"sha256\": \"025474d3928738efb38ac36d4744a74a400c901c7596199e20e45d98eb194105\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-macros-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-macros-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3-macros/pyo3-macros-0.26.0.crate\",\n    \"sha256\": \"2e64eb489f22fe1c95911b77c44cc41e7c19f3082fc81cce90f657cdc42ffded\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-pyo3-macros-backend-0.26.0\",\n    \"filename\": \"tokenizers-vendor-pyo3-macros-backend-0.26.0.source\",\n    \"url\": \"https://static.crates.io/crates/pyo3-macros-backend/pyo3-macros-backend-0.26.0.crate\",\n    \"sha256\": \"100246c0ecf400b475341b8455a9213344569af29a3c841d29270e53102e0fcf\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-quote-1.0.42\",\n    \"filename\": \"tokenizers-vendor-quote-1.0.42.source\",\n    \"url\": \"https://static.crates.io/crates/quote/quote-1.0.42.crate\",\n    \"sha256\": \"a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-r-efi-5.3.0\",\n    \"filename\": \"tokenizers-vendor-r-efi-5.3.0.source\",\n    \"url\": \"https://static.crates.io/crates/r-efi/r-efi-5.3.0.crate\",\n    \"sha256\": \"69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rand-0.9.2\",\n    \"filename\": \"tokenizers-vendor-rand-0.9.2.source\",\n    \"url\": \"https://static.crates.io/crates/rand/rand-0.9.2.crate\",\n    \"sha256\": \"6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rand_chacha-0.9.0\",\n    \"filename\": \"tokenizers-vendor-rand_chacha-0.9.0.source\",\n    \"url\": \"https://static.crates.io/crates/rand_chacha/rand_chacha-0.9.0.crate\",\n    \"sha256\": \"d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rand_core-0.9.3\",\n    \"filename\": \"tokenizers-vendor-rand_core-0.9.3.source\",\n    \"url\": \"https://static.crates.io/crates/rand_core/rand_core-0.9.3.crate\",\n    \"sha256\": \"99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rawpointer-0.2.1\",\n    \"filename\": \"tokenizers-vendor-rawpointer-0.2.1.source\",\n    \"url\": \"https://static.crates.io/crates/rawpointer/rawpointer-0.2.1.crate\",\n    \"sha256\": \"60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rayon-1.11.0\",\n    \"filename\": \"tokenizers-vendor-rayon-1.11.0.source\",\n    \"url\": \"https://static.crates.io/crates/rayon/rayon-1.11.0.crate\",\n    \"sha256\": \"368f01d005bf8fd9b1206fb6fa653e6c4a81ceb1466406b81792d87c5677a58f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rayon-cond-0.4.0\",\n    \"filename\": \"tokenizers-vendor-rayon-cond-0.4.0.source\",\n    \"url\": \"https://static.crates.io/crates/rayon-cond/rayon-cond-0.4.0.crate\",\n    \"sha256\": \"2964d0cf57a3e7a06e8183d14a8b527195c706b7983549cd5462d5aa3747438f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rayon-core-1.13.0\",\n    \"filename\": \"tokenizers-vendor-rayon-core-1.13.0.source\",\n    \"url\": \"https://static.crates.io/crates/rayon-core/rayon-core-1.13.0.crate\",\n    \"sha256\": \"22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-regex-1.12.2\",\n    \"filename\": \"tokenizers-vendor-regex-1.12.2.source\",\n    \"url\": \"https://static.crates.io/crates/regex/regex-1.12.2.crate\",\n    \"sha256\": \"843bc0191f75f3e22651ae5f1e72939ab2f72a4bc30fa80a066bd66edefc24d4\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-regex-automata-0.4.13\",\n    \"filename\": \"tokenizers-vendor-regex-automata-0.4.13.source\",\n    \"url\": \"https://static.crates.io/crates/regex-automata/regex-automata-0.4.13.crate\",\n    \"sha256\": \"5276caf25ac86c8d810222b3dbb938e512c55c6831a10f3e6ed1c93b84041f1c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-regex-syntax-0.8.8\",\n    \"filename\": \"tokenizers-vendor-regex-syntax-0.8.8.source\",\n    \"url\": \"https://static.crates.io/crates/regex-syntax/regex-syntax-0.8.8.crate\",\n    \"sha256\": \"7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rustc-hash-2.1.1\",\n    \"filename\": \"tokenizers-vendor-rustc-hash-2.1.1.source\",\n    \"url\": \"https://static.crates.io/crates/rustc-hash/rustc-hash-2.1.1.crate\",\n    \"sha256\": \"357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rustix-1.1.2\",\n    \"filename\": \"tokenizers-vendor-rustix-1.1.2.source\",\n    \"url\": \"https://static.crates.io/crates/rustix/rustix-1.1.2.crate\",\n    \"sha256\": \"cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-rustversion-1.0.22\",\n    \"filename\": \"tokenizers-vendor-rustversion-1.0.22.source\",\n    \"url\": \"https://static.crates.io/crates/rustversion/rustversion-1.0.22.crate\",\n    \"sha256\": \"b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-ryu-1.0.20\",\n    \"filename\": \"tokenizers-vendor-ryu-1.0.20.source\",\n    \"url\": \"https://static.crates.io/crates/ryu/ryu-1.0.20.crate\",\n    \"sha256\": \"28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-serde-1.0.228\",\n    \"filename\": \"tokenizers-vendor-serde-1.0.228.source\",\n    \"url\": \"https://static.crates.io/crates/serde/serde-1.0.228.crate\",\n    \"sha256\": \"9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-serde_core-1.0.228\",\n    \"filename\": \"tokenizers-vendor-serde_core-1.0.228.source\",\n    \"url\": \"https://static.crates.io/crates/serde_core/serde_core-1.0.228.crate\",\n    \"sha256\": \"41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-serde_derive-1.0.228\",\n    \"filename\": \"tokenizers-vendor-serde_derive-1.0.228.source\",\n    \"url\": \"https://static.crates.io/crates/serde_derive/serde_derive-1.0.228.crate\",\n    \"sha256\": \"d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-serde_json-1.0.145\",\n    \"filename\": \"tokenizers-vendor-serde_json-1.0.145.source\",\n    \"url\": \"https://static.crates.io/crates/serde_json/serde_json-1.0.145.crate\",\n    \"sha256\": \"402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-shlex-1.3.0\",\n    \"filename\": \"tokenizers-vendor-shlex-1.3.0.source\",\n    \"url\": \"https://static.crates.io/crates/shlex/shlex-1.3.0.crate\",\n    \"sha256\": \"0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-signal-hook-registry-1.4.7\",\n    \"filename\": \"tokenizers-vendor-signal-hook-registry-1.4.7.source\",\n    \"url\": \"https://static.crates.io/crates/signal-hook-registry/signal-hook-registry-1.4.7.crate\",\n    \"sha256\": \"7664a098b8e616bdfcc2dc0e9ac44eb231eedf41db4e9fe95d8d32ec728dedad\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-slab-0.4.11\",\n    \"filename\": \"tokenizers-vendor-slab-0.4.11.source\",\n    \"url\": \"https://static.crates.io/crates/slab/slab-0.4.11.crate\",\n    \"sha256\": \"7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-smallvec-1.15.1\",\n    \"filename\": \"tokenizers-vendor-smallvec-1.15.1.source\",\n    \"url\": \"https://static.crates.io/crates/smallvec/smallvec-1.15.1.crate\",\n    \"sha256\": \"67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-spm_precompiled-0.1.4\",\n    \"filename\": \"tokenizers-vendor-spm_precompiled-0.1.4.source\",\n    \"url\": \"https://static.crates.io/crates/spm_precompiled/spm_precompiled-0.1.4.crate\",\n    \"sha256\": \"5851699c4033c63636f7ea4cf7b7c1f1bf06d0cc03cfb42e711de5a5c46cf326\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-static_assertions-1.1.0\",\n    \"filename\": \"tokenizers-vendor-static_assertions-1.1.0.source\",\n    \"url\": \"https://static.crates.io/crates/static_assertions/static_assertions-1.1.0.crate\",\n    \"sha256\": \"a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-strsim-0.11.1\",\n    \"filename\": \"tokenizers-vendor-strsim-0.11.1.source\",\n    \"url\": \"https://static.crates.io/crates/strsim/strsim-0.11.1.crate\",\n    \"sha256\": \"7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-syn-2.0.111\",\n    \"filename\": \"tokenizers-vendor-syn-2.0.111.source\",\n    \"url\": \"https://static.crates.io/crates/syn/syn-2.0.111.crate\",\n    \"sha256\": \"390cc9a294ab71bdb1aa2e99d13be9c753cd2d7bd6560c77118597410c4d2e87\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-target-lexicon-0.13.3\",\n    \"filename\": \"tokenizers-vendor-target-lexicon-0.13.3.source\",\n    \"url\": \"https://static.crates.io/crates/target-lexicon/target-lexicon-0.13.3.crate\",\n    \"sha256\": \"df7f62577c25e07834649fc3b39fafdc597c0a3527dc1c60129201ccfcbaa50c\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-tempfile-3.23.0\",\n    \"filename\": \"tokenizers-vendor-tempfile-3.23.0.source\",\n    \"url\": \"https://static.crates.io/crates/tempfile/tempfile-3.23.0.crate\",\n    \"sha256\": \"2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-thiserror-2.0.17\",\n    \"filename\": \"tokenizers-vendor-thiserror-2.0.17.source\",\n    \"url\": \"https://static.crates.io/crates/thiserror/thiserror-2.0.17.crate\",\n    \"sha256\": \"f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-thiserror-impl-2.0.17\",\n    \"filename\": \"tokenizers-vendor-thiserror-impl-2.0.17.source\",\n    \"url\": \"https://static.crates.io/crates/thiserror-impl/thiserror-impl-2.0.17.crate\",\n    \"sha256\": \"3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-tokio-1.48.0\",\n    \"filename\": \"tokenizers-vendor-tokio-1.48.0.source\",\n    \"url\": \"https://static.crates.io/crates/tokio/tokio-1.48.0.crate\",\n    \"sha256\": \"ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-tokio-macros-2.6.0\",\n    \"filename\": \"tokenizers-vendor-tokio-macros-2.6.0.source\",\n    \"url\": \"https://static.crates.io/crates/tokio-macros/tokio-macros-2.6.0.crate\",\n    \"sha256\": \"af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unicode-ident-1.0.22\",\n    \"filename\": \"tokenizers-vendor-unicode-ident-1.0.22.source\",\n    \"url\": \"https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.22.crate\",\n    \"sha256\": \"9312f7c4f6ff9069b165498234ce8be658059c6728633667c526e27dc2cf1df5\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unicode-normalization-alignments-0.1.12\",\n    \"filename\": \"tokenizers-vendor-unicode-normalization-alignments-0.1.12.source\",\n    \"url\": \"https://static.crates.io/crates/unicode-normalization-alignments/unicode-normalization-alignments-0.1.12.crate\",\n    \"sha256\": \"43f613e4fa046e69818dd287fdc4bc78175ff20331479dab6e1b0f98d57062de\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unicode-segmentation-1.12.0\",\n    \"filename\": \"tokenizers-vendor-unicode-segmentation-1.12.0.source\",\n    \"url\": \"https://static.crates.io/crates/unicode-segmentation/unicode-segmentation-1.12.0.crate\",\n    \"sha256\": \"f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unicode-width-0.2.2\",\n    \"filename\": \"tokenizers-vendor-unicode-width-0.2.2.source\",\n    \"url\": \"https://static.crates.io/crates/unicode-width/unicode-width-0.2.2.crate\",\n    \"sha256\": \"b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unicode_categories-0.1.1\",\n    \"filename\": \"tokenizers-vendor-unicode_categories-0.1.1.source\",\n    \"url\": \"https://static.crates.io/crates/unicode_categories/unicode_categories-0.1.1.crate\",\n    \"sha256\": \"39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unindent-0.2.4\",\n    \"filename\": \"tokenizers-vendor-unindent-0.2.4.source\",\n    \"url\": \"https://static.crates.io/crates/unindent/unindent-0.2.4.crate\",\n    \"sha256\": \"7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-unit-prefix-0.5.2\",\n    \"filename\": \"tokenizers-vendor-unit-prefix-0.5.2.source\",\n    \"url\": \"https://static.crates.io/crates/unit-prefix/unit-prefix-0.5.2.crate\",\n    \"sha256\": \"81e544489bf3d8ef66c953931f56617f423cd4b5494be343d9b9d3dda037b9a3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-utf8parse-0.2.2\",\n    \"filename\": \"tokenizers-vendor-utf8parse-0.2.2.source\",\n    \"url\": \"https://static.crates.io/crates/utf8parse/utf8parse-0.2.2.crate\",\n    \"sha256\": \"06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-version_check-0.9.5\",\n    \"filename\": \"tokenizers-vendor-version_check-0.9.5.source\",\n    \"url\": \"https://static.crates.io/crates/version_check/version_check-0.9.5.crate\",\n    \"sha256\": \"0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasi-0.11.1+wasi-snapshot-preview1\",\n    \"filename\": \"tokenizers-vendor-wasi-0.11.1+wasi-snapshot-preview1.source\",\n    \"url\": \"https://static.crates.io/crates/wasi/wasi-0.11.1+wasi-snapshot-preview1.crate\",\n    \"sha256\": \"ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasip2-1.0.1+wasi-0.2.4\",\n    \"filename\": \"tokenizers-vendor-wasip2-1.0.1+wasi-0.2.4.LICENSE\",\n    \"url\": \"https://raw.githubusercontent.com/bytecodealliance/wasi-rs/3da562c06214feafc14d37bf290671636caa6718/LICENSE-MIT\",\n    \"sha256\": \"23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3\",\n    \"kind\": \"license-file\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasm-bindgen-0.2.106\",\n    \"filename\": \"tokenizers-vendor-wasm-bindgen-0.2.106.source\",\n    \"url\": \"https://static.crates.io/crates/wasm-bindgen/wasm-bindgen-0.2.106.crate\",\n    \"sha256\": \"0d759f433fa64a2d763d1340820e46e111a7a5ab75f993d1852d70b03dbb80fd\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasm-bindgen-macro-0.2.106\",\n    \"filename\": \"tokenizers-vendor-wasm-bindgen-macro-0.2.106.source\",\n    \"url\": \"https://static.crates.io/crates/wasm-bindgen-macro/wasm-bindgen-macro-0.2.106.crate\",\n    \"sha256\": \"48cb0d2638f8baedbc542ed444afc0644a29166f1595371af4fecf8ce1e7eeb3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasm-bindgen-macro-support-0.2.106\",\n    \"filename\": \"tokenizers-vendor-wasm-bindgen-macro-support-0.2.106.source\",\n    \"url\": \"https://static.crates.io/crates/wasm-bindgen-macro-support/wasm-bindgen-macro-support-0.2.106.crate\",\n    \"sha256\": \"cefb59d5cd5f92d9dcf80e4683949f15ca4b511f4ac0a6e14d4e1ac60c6ecd40\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wasm-bindgen-shared-0.2.106\",\n    \"filename\": \"tokenizers-vendor-wasm-bindgen-shared-0.2.106.source\",\n    \"url\": \"https://static.crates.io/crates/wasm-bindgen-shared/wasm-bindgen-shared-0.2.106.crate\",\n    \"sha256\": \"cbc538057e648b67f72a982e708d485b2efa771e1ac05fec311f9f63e5800db4\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-web-time-1.1.0\",\n    \"filename\": \"tokenizers-vendor-web-time-1.1.0.source\",\n    \"url\": \"https://static.crates.io/crates/web-time/web-time-1.1.0.crate\",\n    \"sha256\": \"5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-windows-link-0.2.1\",\n    \"filename\": \"tokenizers-vendor-windows-link-0.2.1.source\",\n    \"url\": \"https://static.crates.io/crates/windows-link/windows-link-0.2.1.crate\",\n    \"sha256\": \"f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-windows-sys-0.61.2\",\n    \"filename\": \"tokenizers-vendor-windows-sys-0.61.2.source\",\n    \"url\": \"https://static.crates.io/crates/windows-sys/windows-sys-0.61.2.crate\",\n    \"sha256\": \"ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-wit-bindgen-0.46.0\",\n    \"filename\": \"tokenizers-vendor-wit-bindgen-0.46.0.source\",\n    \"url\": \"https://static.crates.io/crates/wit-bindgen/wit-bindgen-0.46.0.crate\",\n    \"sha256\": \"f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-zerocopy-0.8.31\",\n    \"filename\": \"tokenizers-vendor-zerocopy-0.8.31.source\",\n    \"url\": \"https://static.crates.io/crates/zerocopy/zerocopy-0.8.31.crate\",\n    \"sha256\": \"fd74ec98b9250adb3ca554bdde269adf631549f51d8a8f8f0a10b50f1cb298c3\"\n  },\n  {\n    \"id\": \"tokenizers-vendor-zerocopy-derive-0.8.31\",\n    \"filename\": \"tokenizers-vendor-zerocopy-derive-0.8.31.source\",\n    \"url\": \"https://static.crates.io/crates/zerocopy-derive/zerocopy-derive-0.8.31.crate\",\n    \"sha256\": \"d8a8d209fdf45cf5138cbb5a506f6b52522a25afccc534d1475dad8e31105c6a\"\n  }\n]\n"
+    },
+    {
+      "type": "file",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/single/qt-everywhere-src-6.11.1.tar.xz",
+      "sha256": "252acef8c5ae68074d91cadba2ee4a83465051bbb970dd26e8f0daa0f3904e03",
+      "dest": "notice-sources",
+      "dest-filename": "qt-6.11.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.1-src/pyside-setup-everywhere-src-6.11.1.tar.xz",
+      "sha256": "6ffd9835bb0dd2c56f061d62f1616bb1707cfc0202b80e3165d6be087f3965e2",
+      "dest": "notice-sources",
+      "dest-filename": "pyside-6.11.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://raw.githubusercontent.com/unicode-org/icu/680f521746a3bd6a86f25f25ee50a62d88b489cf/icu4c/LICENSE",
+      "sha256": "f3005e195ff74d8812cc1f182a1c446fab678d70a10e3dada497585befee5416",
+      "dest": "notice-sources",
+      "dest-filename": "icu-73.2.LICENSE"
+    },
+    {
+      "type": "file",
+      "url": "https://files.pythonhosted.org/packages/cc/33/ea3cb3839607eb175da835244a798f797f478c5ddf0e8ecdf57ea85a4c70/sentencepiece-0.2.2.tar.gz",
+      "sha256": "3d2b5e824b5622038dc7b490897efe05ebbbb9e7350fc142f3ecc8789ef9bdf6",
+      "dest": "notice-sources",
+      "dest-filename": "sentencepiece-0.2.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz",
+      "sha256": "473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-0.22.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/ahash/ahash-0.8.12.crate",
+      "sha256": "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-ahash-0.8.12.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/aho-corasick/aho-corasick-1.1.4.crate",
+      "sha256": "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-aho-corasick-1.1.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/anstream/anstream-0.6.21.crate",
+      "sha256": "43d5b281e737544384e969a5ccad3f1cdd24b48086a0fc1b2a5262a26b8f4f4a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-anstream-0.6.21.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/anstyle/anstyle-1.0.13.crate",
+      "sha256": "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-anstyle-1.0.13.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/anstyle-parse/anstyle-parse-0.2.7.crate",
+      "sha256": "4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-anstyle-parse-0.2.7.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/anstyle-query/anstyle-query-1.1.5.crate",
+      "sha256": "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-anstyle-query-1.1.5.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/anstyle-wincon/anstyle-wincon-3.0.11.crate",
+      "sha256": "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-anstyle-wincon-3.0.11.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/autocfg/autocfg-1.5.0.crate",
+      "sha256": "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-autocfg-1.5.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/base64/base64-0.13.1.crate",
+      "sha256": "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-base64-0.13.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/bitflags/bitflags-2.10.0.crate",
+      "sha256": "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-bitflags-2.10.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/bumpalo/bumpalo-3.19.0.crate",
+      "sha256": "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-bumpalo-3.19.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/castaway/castaway-0.2.4.crate",
+      "sha256": "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-castaway-0.2.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/cc/cc-1.2.48.crate",
+      "sha256": "c481bdbf0ed3b892f6f806287d72acd515b352a4ec27a208489b8c1bc839633a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-cc-1.2.48.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/cfg-if/cfg-if-1.0.4.crate",
+      "sha256": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-cfg-if-1.0.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/colorchoice/colorchoice-1.0.4.crate",
+      "sha256": "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-colorchoice-1.0.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/compact_str/compact_str-0.9.0.crate",
+      "sha256": "3fdb1325a1cece981e8a296ab8f0f9b63ae357bd0784a9faaf548cc7b480707a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-compact_str-0.9.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/console/console-0.16.1.crate",
+      "sha256": "b430743a6eb14e9764d4260d4c0d8123087d504eeb9c48f2b2a5e810dd369df4",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-console-0.16.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/crossbeam-deque/crossbeam-deque-0.8.6.crate",
+      "sha256": "9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-crossbeam-deque-0.8.6.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/crossbeam-epoch/crossbeam-epoch-0.9.18.crate",
+      "sha256": "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-crossbeam-epoch-0.9.18.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/crossbeam-utils/crossbeam-utils-0.8.21.crate",
+      "sha256": "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-crossbeam-utils-0.8.21.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/darling/darling-0.20.11.crate",
+      "sha256": "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-darling-0.20.11.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/darling_core/darling_core-0.20.11.crate",
+      "sha256": "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-darling_core-0.20.11.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/darling_macro/darling_macro-0.20.11.crate",
+      "sha256": "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-darling_macro-0.20.11.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/dary_heap/dary_heap-0.3.8.crate",
+      "sha256": "06d2e3287df1c007e74221c49ca10a95d557349e54b3a75dc2fb14712c751f04",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-dary_heap-0.3.8.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/derive_builder/derive_builder-0.20.2.crate",
+      "sha256": "507dfb09ea8b7fa618fcf76e953f4f5e192547945816d5358edffe39f6f94947",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-derive_builder-0.20.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/derive_builder_core/derive_builder_core-0.20.2.crate",
+      "sha256": "2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-derive_builder_core-0.20.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/derive_builder_macro/derive_builder_macro-0.20.2.crate",
+      "sha256": "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-derive_builder_macro-0.20.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/either/either-1.15.0.crate",
+      "sha256": "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-either-1.15.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/encode_unicode/encode_unicode-1.0.0.crate",
+      "sha256": "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-encode_unicode-1.0.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/env_filter/env_filter-0.1.4.crate",
+      "sha256": "1bf3c259d255ca70051b30e2e95b5446cdb8949ac4cd22c0d7fd634d89f568e2",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-env_filter-0.1.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/env_logger/env_logger-0.11.8.crate",
+      "sha256": "13c863f0904021b108aa8b2f55046443e6b1ebde8fd4a15c399893aae4fa069f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-env_logger-0.11.8.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/errno/errno-0.3.14.crate",
+      "sha256": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-errno-0.3.14.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/esaxx-rs/esaxx-rs-0.1.10.crate",
+      "sha256": "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-esaxx-rs-0.1.10.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/fastrand/fastrand-2.3.0.crate",
+      "sha256": "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-fastrand-2.3.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/find-msvc-tools/find-msvc-tools-0.1.5.crate",
+      "sha256": "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-find-msvc-tools-0.1.5.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/fnv/fnv-1.0.7.crate",
+      "sha256": "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-fnv-1.0.7.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures/futures-0.3.31.crate",
+      "sha256": "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-channel/futures-channel-0.3.31.crate",
+      "sha256": "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-channel-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-core/futures-core-0.3.31.crate",
+      "sha256": "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-core-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-executor/futures-executor-0.3.31.crate",
+      "sha256": "1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-executor-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-io/futures-io-0.3.31.crate",
+      "sha256": "9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-io-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-macro/futures-macro-0.3.31.crate",
+      "sha256": "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-macro-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-sink/futures-sink-0.3.31.crate",
+      "sha256": "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-sink-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-task/futures-task-0.3.31.crate",
+      "sha256": "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-task-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/futures-util/futures-util-0.3.31.crate",
+      "sha256": "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-futures-util-0.3.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/getrandom/getrandom-0.3.4.crate",
+      "sha256": "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-getrandom-0.3.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/heck/heck-0.5.0.crate",
+      "sha256": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-heck-0.5.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/ident_case/ident_case-1.0.1.crate",
+      "sha256": "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-ident_case-1.0.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/indicatif/indicatif-0.18.3.crate",
+      "sha256": "9375e112e4b463ec1b1c6c011953545c65a30164fbab5b581df32b3abf0dcb88",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-indicatif-0.18.3.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/indoc/indoc-2.0.7.crate",
+      "sha256": "79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-indoc-2.0.7.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/is_terminal_polyfill/is_terminal_polyfill-1.70.2.crate",
+      "sha256": "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-is_terminal_polyfill-1.70.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/itertools/itertools-0.14.0.crate",
+      "sha256": "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-itertools-0.14.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/itoa/itoa-1.0.15.crate",
+      "sha256": "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-itoa-1.0.15.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/jiff/jiff-0.2.16.crate",
+      "sha256": "49cce2b81f2098e7e3efc35bc2e0a6b7abec9d34128283d7a26fa8f32a6dbb35",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-jiff-0.2.16.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/jiff-static/jiff-static-0.2.16.crate",
+      "sha256": "980af8b43c3ad5d8d349ace167ec8170839f753a42d233ba19e08afe1850fa69",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-jiff-static-0.2.16.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/js-sys/js-sys-0.3.83.crate",
+      "sha256": "464a3709c7f55f1f721e5389aa6ea4e3bc6aba669353300af094b29ffbdde1d8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-js-sys-0.3.83.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.177.crate",
+      "sha256": "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-libc-0.2.177.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/linux-raw-sys/linux-raw-sys-0.11.0.crate",
+      "sha256": "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-linux-raw-sys-0.11.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/log/log-0.4.28.crate",
+      "sha256": "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-log-0.4.28.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/macro_rules_attribute/macro_rules_attribute-0.2.2.crate",
+      "sha256": "65049d7923698040cd0b1ddcced9b0eb14dd22c5f86ae59c3740eab64a676520",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-macro_rules_attribute-0.2.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/macro_rules_attribute-proc_macro/macro_rules_attribute-proc_macro-0.2.2.crate",
+      "sha256": "670fdfda89751bc4a84ac13eaa63e205cf0fd22b4c9a5fbfa085b63c1f1d3a30",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-macro_rules_attribute-proc_macro-0.2.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/matrixmultiply/matrixmultiply-0.3.10.crate",
+      "sha256": "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-matrixmultiply-0.3.10.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.6.crate",
+      "sha256": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-memchr-2.7.6.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/memoffset/memoffset-0.9.1.crate",
+      "sha256": "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-memoffset-0.9.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/minimal-lexical/minimal-lexical-0.2.1.crate",
+      "sha256": "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-minimal-lexical-0.2.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/mio/mio-1.1.0.crate",
+      "sha256": "69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-mio-1.1.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/monostate/monostate-0.1.18.crate",
+      "sha256": "3341a273f6c9d5bef1908f17b7267bbab0e95c9bf69a0d4dcf8e9e1b2c76ef67",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-monostate-0.1.18.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/monostate-impl/monostate-impl-0.1.18.crate",
+      "sha256": "e4db6d5580af57bf992f59068d4ea26fd518574ff48d7639b255a36f9de6e7e9",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-monostate-impl-0.1.18.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/ndarray/ndarray-0.16.1.crate",
+      "sha256": "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-ndarray-0.16.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/nom/nom-7.1.3.crate",
+      "sha256": "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-nom-7.1.3.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/num-complex/num-complex-0.4.6.crate",
+      "sha256": "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-num-complex-0.4.6.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/num-integer/num-integer-0.1.46.crate",
+      "sha256": "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-num-integer-0.1.46.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/num-traits/num-traits-0.2.19.crate",
+      "sha256": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-num-traits-0.2.19.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/numpy/numpy-0.26.0.crate",
+      "sha256": "9b2dba356160b54f5371b550575b78130a54718b4c6e46b3f33a6da74a27e78b",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-numpy-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/once_cell/once_cell-1.21.3.crate",
+      "sha256": "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-once_cell-1.21.3.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/once_cell_polyfill/once_cell_polyfill-1.70.2.crate",
+      "sha256": "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-once_cell_polyfill-1.70.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/onig/onig-6.5.1.crate",
+      "sha256": "336b9c63443aceef14bea841b899035ae3abe89b7c486aaf4c5bd8aafedac3f0",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-onig-6.5.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/onig_sys/onig_sys-69.9.1.crate",
+      "sha256": "c7f86c6eef3d6df15f23bcfb6af487cbd2fed4e5581d58d5bf1f5f8b7f6727dc",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-onig_sys-69.9.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/paste/paste-1.0.15.crate",
+      "sha256": "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-paste-1.0.15.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pin-project-lite/pin-project-lite-0.2.16.crate",
+      "sha256": "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pin-project-lite-0.2.16.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pin-utils/pin-utils-0.1.0.crate",
+      "sha256": "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pin-utils-0.1.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pkg-config/pkg-config-0.3.32.crate",
+      "sha256": "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pkg-config-0.3.32.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/portable-atomic/portable-atomic-1.11.1.crate",
+      "sha256": "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-portable-atomic-1.11.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/portable-atomic-util/portable-atomic-util-0.2.4.crate",
+      "sha256": "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-portable-atomic-util-0.2.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/ppv-lite86/ppv-lite86-0.2.21.crate",
+      "sha256": "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-ppv-lite86-0.2.21.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/proc-macro2/proc-macro2-1.0.103.crate",
+      "sha256": "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-proc-macro2-1.0.103.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3/pyo3-0.26.0.crate",
+      "sha256": "7ba0117f4212101ee6544044dae45abe1083d30ce7b29c4b5cbdfa2354e07383",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3-async-runtimes/pyo3-async-runtimes-0.26.0.crate",
+      "sha256": "e6ee6d4cb3e8d5b925f5cdb38da183e0ff18122eb2048d4041c9e7034d026e23",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-async-runtimes-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3-build-config/pyo3-build-config-0.26.0.crate",
+      "sha256": "4fc6ddaf24947d12a9aa31ac65431fb1b851b8f4365426e182901eabfb87df5f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-build-config-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3-ffi/pyo3-ffi-0.26.0.crate",
+      "sha256": "025474d3928738efb38ac36d4744a74a400c901c7596199e20e45d98eb194105",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-ffi-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3-macros/pyo3-macros-0.26.0.crate",
+      "sha256": "2e64eb489f22fe1c95911b77c44cc41e7c19f3082fc81cce90f657cdc42ffded",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-macros-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/pyo3-macros-backend/pyo3-macros-backend-0.26.0.crate",
+      "sha256": "100246c0ecf400b475341b8455a9213344569af29a3c841d29270e53102e0fcf",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-pyo3-macros-backend-0.26.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/quote/quote-1.0.42.crate",
+      "sha256": "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-quote-1.0.42.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/r-efi/r-efi-5.3.0.crate",
+      "sha256": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-r-efi-5.3.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rand/rand-0.9.2.crate",
+      "sha256": "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rand-0.9.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rand_chacha/rand_chacha-0.9.0.crate",
+      "sha256": "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rand_chacha-0.9.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rand_core/rand_core-0.9.3.crate",
+      "sha256": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rand_core-0.9.3.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rawpointer/rawpointer-0.2.1.crate",
+      "sha256": "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rawpointer-0.2.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rayon/rayon-1.11.0.crate",
+      "sha256": "368f01d005bf8fd9b1206fb6fa653e6c4a81ceb1466406b81792d87c5677a58f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rayon-1.11.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rayon-cond/rayon-cond-0.4.0.crate",
+      "sha256": "2964d0cf57a3e7a06e8183d14a8b527195c706b7983549cd5462d5aa3747438f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rayon-cond-0.4.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rayon-core/rayon-core-1.13.0.crate",
+      "sha256": "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rayon-core-1.13.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/regex/regex-1.12.2.crate",
+      "sha256": "843bc0191f75f3e22651ae5f1e72939ab2f72a4bc30fa80a066bd66edefc24d4",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-regex-1.12.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/regex-automata/regex-automata-0.4.13.crate",
+      "sha256": "5276caf25ac86c8d810222b3dbb938e512c55c6831a10f3e6ed1c93b84041f1c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-regex-automata-0.4.13.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/regex-syntax/regex-syntax-0.8.8.crate",
+      "sha256": "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-regex-syntax-0.8.8.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rustc-hash/rustc-hash-2.1.1.crate",
+      "sha256": "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rustc-hash-2.1.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rustix/rustix-1.1.2.crate",
+      "sha256": "cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rustix-1.1.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/rustversion/rustversion-1.0.22.crate",
+      "sha256": "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-rustversion-1.0.22.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/ryu/ryu-1.0.20.crate",
+      "sha256": "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-ryu-1.0.20.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/serde/serde-1.0.228.crate",
+      "sha256": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-serde-1.0.228.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/serde_core/serde_core-1.0.228.crate",
+      "sha256": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-serde_core-1.0.228.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/serde_derive/serde_derive-1.0.228.crate",
+      "sha256": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-serde_derive-1.0.228.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/serde_json/serde_json-1.0.145.crate",
+      "sha256": "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-serde_json-1.0.145.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/shlex/shlex-1.3.0.crate",
+      "sha256": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-shlex-1.3.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/signal-hook-registry/signal-hook-registry-1.4.7.crate",
+      "sha256": "7664a098b8e616bdfcc2dc0e9ac44eb231eedf41db4e9fe95d8d32ec728dedad",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-signal-hook-registry-1.4.7.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/slab/slab-0.4.11.crate",
+      "sha256": "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-slab-0.4.11.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/smallvec/smallvec-1.15.1.crate",
+      "sha256": "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-smallvec-1.15.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/spm_precompiled/spm_precompiled-0.1.4.crate",
+      "sha256": "5851699c4033c63636f7ea4cf7b7c1f1bf06d0cc03cfb42e711de5a5c46cf326",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-spm_precompiled-0.1.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/static_assertions/static_assertions-1.1.0.crate",
+      "sha256": "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-static_assertions-1.1.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/strsim/strsim-0.11.1.crate",
+      "sha256": "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-strsim-0.11.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/syn/syn-2.0.111.crate",
+      "sha256": "390cc9a294ab71bdb1aa2e99d13be9c753cd2d7bd6560c77118597410c4d2e87",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-syn-2.0.111.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/target-lexicon/target-lexicon-0.13.3.crate",
+      "sha256": "df7f62577c25e07834649fc3b39fafdc597c0a3527dc1c60129201ccfcbaa50c",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-target-lexicon-0.13.3.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/tempfile/tempfile-3.23.0.crate",
+      "sha256": "2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-tempfile-3.23.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/thiserror/thiserror-2.0.17.crate",
+      "sha256": "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-thiserror-2.0.17.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/thiserror-impl/thiserror-impl-2.0.17.crate",
+      "sha256": "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-thiserror-impl-2.0.17.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/tokio/tokio-1.48.0.crate",
+      "sha256": "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-tokio-1.48.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/tokio-macros/tokio-macros-2.6.0.crate",
+      "sha256": "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-tokio-macros-2.6.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.22.crate",
+      "sha256": "9312f7c4f6ff9069b165498234ce8be658059c6728633667c526e27dc2cf1df5",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unicode-ident-1.0.22.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unicode-normalization-alignments/unicode-normalization-alignments-0.1.12.crate",
+      "sha256": "43f613e4fa046e69818dd287fdc4bc78175ff20331479dab6e1b0f98d57062de",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unicode-normalization-alignments-0.1.12.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unicode-segmentation/unicode-segmentation-1.12.0.crate",
+      "sha256": "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unicode-segmentation-1.12.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unicode-width/unicode-width-0.2.2.crate",
+      "sha256": "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unicode-width-0.2.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unicode_categories/unicode_categories-0.1.1.crate",
+      "sha256": "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unicode_categories-0.1.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unindent/unindent-0.2.4.crate",
+      "sha256": "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unindent-0.2.4.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/unit-prefix/unit-prefix-0.5.2.crate",
+      "sha256": "81e544489bf3d8ef66c953931f56617f423cd4b5494be343d9b9d3dda037b9a3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-unit-prefix-0.5.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/utf8parse/utf8parse-0.2.2.crate",
+      "sha256": "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-utf8parse-0.2.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/version_check/version_check-0.9.5.crate",
+      "sha256": "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-version_check-0.9.5.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wasi/wasi-0.11.1+wasi-snapshot-preview1.crate",
+      "sha256": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasi-0.11.1+wasi-snapshot-preview1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasi-rs/3da562c06214feafc14d37bf290671636caa6718/LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasip2-1.0.1+wasi-0.2.4.LICENSE"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wasm-bindgen/wasm-bindgen-0.2.106.crate",
+      "sha256": "0d759f433fa64a2d763d1340820e46e111a7a5ab75f993d1852d70b03dbb80fd",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasm-bindgen-0.2.106.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wasm-bindgen-macro/wasm-bindgen-macro-0.2.106.crate",
+      "sha256": "48cb0d2638f8baedbc542ed444afc0644a29166f1595371af4fecf8ce1e7eeb3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasm-bindgen-macro-0.2.106.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wasm-bindgen-macro-support/wasm-bindgen-macro-support-0.2.106.crate",
+      "sha256": "cefb59d5cd5f92d9dcf80e4683949f15ca4b511f4ac0a6e14d4e1ac60c6ecd40",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasm-bindgen-macro-support-0.2.106.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wasm-bindgen-shared/wasm-bindgen-shared-0.2.106.crate",
+      "sha256": "cbc538057e648b67f72a982e708d485b2efa771e1ac05fec311f9f63e5800db4",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wasm-bindgen-shared-0.2.106.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/web-time/web-time-1.1.0.crate",
+      "sha256": "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-web-time-1.1.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/windows-link/windows-link-0.2.1.crate",
+      "sha256": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-windows-link-0.2.1.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/windows-sys/windows-sys-0.61.2.crate",
+      "sha256": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-windows-sys-0.61.2.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/wit-bindgen/wit-bindgen-0.46.0.crate",
+      "sha256": "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-wit-bindgen-0.46.0.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/zerocopy/zerocopy-0.8.31.crate",
+      "sha256": "fd74ec98b9250adb3ca554bdde269adf631549f51d8a8f8f0a10b50f1cb298c3",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-zerocopy-0.8.31.source"
+    },
+    {
+      "type": "file",
+      "url": "https://static.crates.io/crates/zerocopy-derive/zerocopy-derive-0.8.31.crate",
+      "sha256": "d8a8d209fdf45cf5138cbb5a506f6b52522a25afccc534d1475dad8e31105c6a",
+      "dest": "notice-sources",
+      "dest-filename": "tokenizers-vendor-zerocopy-derive-0.8.31.source"
+    }
+  ]
+}

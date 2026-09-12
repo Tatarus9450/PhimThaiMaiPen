@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0b1",
+  "scope": "Local beta runtime checks; pre-release license-only packaging changes do not change app code. Fresh CI ASR and bundle checks are recorded with the GitHub release assets.",
+  "runtime": {
+    "status": "passed",
+    "stage": "complete",
+    "asr_requested": false,
+    "scope": "Packaged /app code, runtime-only, no GUI/audio capture/portal/clipboard/singleton. Temporary XDG state; read-only model and hash-pinned public audio. No transcript output.",
+    "runtime": "runtime/org.kde.Platform/x86_64/6.11",
+    "version": "2.0.0b1",
+    "defaults": {
+      "model": "qwen-0.6b",
+      "device": "auto",
+      "profile": "smart",
+      "language": "auto"
+    },
+    "source": {
+      "files_checked": 31,
+      "matches_checkout": true,
+      "aggregate_sha256": "6fa62d89267c3fb0f42741e024d7a5b83f93924679c8d8e7e58f2bdd5ad50cf2"
+    },
+    "dependencies": {
+      "requirements_checked": 65,
+      "failures": []
+    },
+    "versions": {
+      "PySide6": "6.11.1",
+      "shiboken6": "6.11.1",
+      "torch": "2.11.0+cpu",
+      "qwen-asr": "0.0.6",
+      "transformers": "4.57.6",
+      "dbus-next": "0.2.3",
+      "soundfile": "0.14.0"
+    },
+    "available_memory_mib": 6650,
+    "qt": {
+      "version": "6.11.1",
+      "audio_backend": "pulseaudio",
+      "audio_classes_imported": [
+        "QAudioSource",
+        "QAudioOutput",
+        "QMediaPlayer"
+      ],
+      "patched_library": true,
+      "ffmpeg_plugin": true
+    },
+    "ffmpeg": "ffmpeg version 7.1.3 Copyright (c) 2000-2025 the FFmpeg developers",
+    "wall_seconds": 2.48,
+    "peak_rss_mib": 447.0
+  },
+  "ui": {
+    "cases": 32,
+    "geometry_issues": 0,
+    "backend": "offscreen",
+    "external_services": "simulated"
+  },
+  "feedback": {
+    "version": "2.0.0b1",
+    "platform": "wayland",
+    "popup": {
+      "event": "state",
+      "state": "listening",
+      "visible": true,
+      "profile": "MIX",
+      "x": 32,
+      "y": 374,
+      "width": 200,
+      "height": 52,
+      "focused": false
+    },
+    "decoded_frames": 2240,
+    "errors": []
+  },
+  "feedback_limits": "Actual 200x52 XCB popup from Wayland, no focus; ready WAV decoded by QMediaPlayer without output to speakers. This check does not assert audible playback or portal consent.",
+  "unit_tests": {
+    "application": 112,
+    "status": "passed"
+  },
+  "local_asr": "Not executed: available RAM below bounded preflight; CI runs public Thai and English FLEURS checks before publication."
+}

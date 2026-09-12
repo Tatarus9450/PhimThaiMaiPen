@@ -4,11 +4,26 @@
 
 **Local Thai and English voice typing for Linux** — editable transcripts, selectable models, microphone settings, and offline Thai-to-English translation
 
-รุ่นปัจจุบัน `2.0.0.dev3` ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังระบุความเข้ากันได้เป็นรายโมเดลและอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
+รุ่นปัจจุบัน **2.0.0 beta 1** ค่าเริ่มต้น **Qwen3-ASR 0.6B + Smart Mix** ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังระบุความเข้ากันได้เป็นรายโมเดลและอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
 
 ![Transcript editor](docs/screenshots/transcript.png)
 
 ## ติดตั้ง / Install
+
+### Flatpak · แนะนำสำหรับผู้ใช้ทั่วไป
+
+ดาวน์โหลด `PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak` จาก [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.1) แล้วเปิดไฟล์ด้วย **Discover** เพื่อติดตั้ง หรือใช้คำสั่ง:
+
+```bash
+flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.1-x86_64.flatpak
+flatpak run --branch=beta io.github.tatarus9450.PhimThaiMaiPen
+```
+
+ต้องมี Flatpak และอินเทอร์เน็ตสำหรับติดตั้ง KDE runtime กับดาวน์โหลดโมเดลครั้งแรก แพ็กเกจรวม Python, Qt, FFmpeg และ PyTorch CPU แล้ว ค่าเริ่มต้นคือ **Qwen3-ASR 0.6B**, ตรวจภาษาอัตโนมัติ และ **Smart Mix** เปลี่ยนโมเดลได้ภายหลัง
+
+รุ่นนี้เป็น **beta แจกผ่าน GitHub** ยังค้นหาใน Flathub ไม่ได้ การอัปเดตใช้ไฟล์ `.flatpak` รุ่นใหม่ ส่วนโมเดลและการตั้งค่าอยู่ใน `~/.var/app/io.github.tatarus9450.PhimThaiMaiPen/` เปิดใช้ปุ่มลัดและอนุญาตวางข้อความใน Settings หลังติดตั้ง ไม่ควรเปิดรุ่น native กับ Flatpak พร้อมกันเพราะใช้ปุ่มลัดชุดเดียวกัน
+
+### Native · สำหรับนักพัฒนา
 
 ต้องมี **Python 3.11–3.13 พร้อม venv**, **FFmpeg**, **patch**, **pactl** และระบบเสียง PulseAudio หรือ PipeWire ที่เปิดบริการ PulseAudio compatibility ติดตั้งแพ็กเกจเหล่านี้จากตัวจัดการแพ็กเกจของ Linux ก่อน ส่วนปุ่มลัดและการวางอัตโนมัติต้องมี `xdg-desktop-portal` พร้อม backend ของเดสก์ท็อป
 
@@ -138,7 +153,7 @@ QT_QPA_PLATFORM=offscreen .venv-app/bin/python -m unittest discover -s tests -v
 
 ผลทดสอบจริงอยู่ใน [บันทึกการพัฒนา](docs/IMPLEMENTATION.md) และ [`docs/evidence/`](docs/evidence/) ชุดเสียง FLEURS 4 ไฟล์ให้ข้อความเท่าเดิมเมื่อเปลี่ยนจาก 12 เป็น 6 threads และลดเวลาประมวลผล 43.9% ผลนี้เป็นเพียงชุดทดสอบเล็กบนเครื่องเดียว ไม่ใช่คำรับรองความเร็วทุกภาษาและทุกเครื่อง
 
-งานปัจจุบันเผยแพร่ซอร์สผ่าน GitHub **ยังไม่ส่งขึ้น Flathub/Discover** ไฟล์ Flatpak และงาน source build เก็บไว้เป็นผลทดลองสำหรับพัฒนาภายหลัง อ่าน [บันทึกการแจกแพ็กเกจ](docs/DISTRIBUTION.md)
+เผยแพร่ซอร์สและ Flatpak beta ผ่าน GitHub เปิดไฟล์ติดตั้งด้วย Discover ได้ แต่ **ยังไม่มีรายการบน Flathub** อ่าน [วิธีสร้างและแจกแพ็กเกจ](docs/DISTRIBUTION.md)
 
 ## License
 

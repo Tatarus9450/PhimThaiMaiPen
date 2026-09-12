@@ -13,6 +13,7 @@
   <description>
     <p>Turn Thai and English speech into editable text on your Linux desktop. Choose a local speech model, record with your microphone or open an audio file, and review the result before pasting it.</p>
     <p>Models are downloaded separately. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
+    <p>Qwen3-ASR 0.6B with Smart Mix is selected by default for Thai and English dictation. Other models remain available in the model manager.</p>
     <ul>
       <li>Edit, copy, retry, and translate Thai text into English</li>
       <li>Select your microphone and test its input level</li>
@@ -26,7 +27,9 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="2.0.0~dev1" date="2026-09-12" type="development"/>
+    <release version="2.0.0~beta1" date="2026-09-12" type="development">
+      <description><p>First downloadable Flatpak preview with Qwen3-ASR 0.6B as the default, Liquid Glass UI, a small left-side dictation popup, sound feedback, and Thai keyboard paste support.</p></description>
+    </release>
   </releases>
   <supports><control>keyboard</control><control>pointing</control></supports>
 </component>
