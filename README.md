@@ -1,14 +1,18 @@
 # PhimThaiMaiPen 2.0 · พิมพ์ไทยไม่เป็น
 
-<img src="phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png" alt="ไอคอนเพนกวินถือไมโครโฟนบนพื้นสีน้ำเงิน ไม่มีตัวอักษร" width="144" height="144">
+<img src="phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png" alt="ไอคอนเพนกวินถือไมโครโฟน พื้นโปร่งใส ไม่มีตัวอักษร" width="144" height="144">
 
 แอปพิมพ์ด้วยเสียงไทย–อังกฤษสำหรับ Linux เลือกโมเดล รับเสียงจากไมค์หรือไฟล์ ตรวจแก้ข้อความ แล้วคัดลอกหรือวางลงแอปอื่น ถอดเสียงและแปลในเครื่องหลังดาวน์โหลดโมเดล
 
 **Local Thai and English voice typing for Linux** — editable transcripts, selectable models, microphone settings, and offline Thai-to-English translation
 
-เผยแพร่ **2.0.0 beta 3** แล้ว รุ่นนี้ใช้ไอคอนเพนกวินถือไมโครโฟนที่สร้างใหม่ ไม่มีตัวอักษรในภาพ และหน้าต่างกระจกโทน **น้ำเงินโคบอลต์ / อำพัน / งาช้าง** การติดตั้งใหม่ใช้ **Qwen3-ASR 0.6B + Smart Mix + Auto → CPU + วางทันที** ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังเป็น Beta และรองรับเป็นรายโมเดลกับอุปกรณ์ ไม่รับรอง Linux ทุกเครื่อง
+ซอร์สปัจจุบันใช้ **Typhoon ASR Realtime จากรุ่น 1.0 + Smart Mix + Auto → CPU + วางทันที** เป็นค่าเริ่มต้นสำหรับการติดตั้งใหม่ โดยดาวน์โหลดโมเดลประมาณ **462 MB** อัตโนมัติ ส่วน **Qwen เป็น Optional** ให้เลือกดาวน์โหลดเพิ่มในหน้าโมเดล ป้าย **เบาที่สุด** ใช้กับ Typhoon และ **ดีที่สุด** ใช้กับ Qwen ตามการจัดหมวดของแอป ทดสอบหลักบน **Fedora 44 KDE / Wayland / x86_64** การเร่งด้วย GPU/NPU ยังเป็น Beta และรองรับเป็นรายโมเดลกับอุปกรณ์
 
-![Transcript editor](docs/screenshots/transcript.png)
+ไฟล์ Flatpak **2.0.0 beta 3** ที่เผยแพร่แล้วเป็นรุ่นก่อนการเปลี่ยนค่าเริ่มต้นนี้ และยังเริ่มด้วย Qwen ใช้การติดตั้ง Native จากซอร์สปัจจุบันเพื่อรับการเปลี่ยนแปลงนี้
+
+หน้าตาปัจจุบันใช้ **Liquid Glass สีฟ้าอ่อน ขาว และดำ สไตล์ iOS** พร้อมโลโก้เพนกวินจากแบนเนอร์ GitHub ที่ Gen ใหม่และตัดพื้นหลังโปร่งใส กระจกแสดงพื้นหลังภายในแอปผ่านชั้นผิวขาวโปร่งแสง มีตัวเลือก **ลดความโปร่งใส** สำหรับการอ่านชัดขึ้น ดู [ที่มาและรายละเอียดภาพ](docs/BRANDING-ICE-GLASS.md)
+
+![Transcript editor](docs/screenshots/ice-glass-transcript.png)
 
 ## ติดตั้ง / Install
 
@@ -38,7 +42,7 @@ python3 scripts/install-app.py
 
 จากนั้นเปิด **PhimThaiMaiPen** จากเมนูแอป ตัวติดตั้งเลือก Python ที่รองรับ สร้าง `.venv-app` ติดตั้ง PyTorch รุ่น CPU และเพิ่ม launcher สำหรับผู้ใช้ปัจจุบัน ไม่ใช้ sudo ไม่แก้ Python ของระบบ การดาวน์โหลดโมเดลจะเริ่มเมื่อเปิดแอปครั้งแรก
 
-The installer uses a separate environment and a pinned, checksum-verified Qwen source patch. It installs only Qwen's inference dependencies, validates package requirements and imports, and adds a desktop launcher. Keep the checkout and `.venv-app` in place
+The installer uses a separate environment with CPU PyTorch, matching CPU Torchaudio and NeMo for the default Typhoon model. It also includes the pinned, checksum-verified Qwen inference runtime, so optional Qwen models need only be downloaded from Models. It validates package requirements and imports and adds a desktop launcher. Keep the checkout and `.venv-app` in place
 
 ```bash
 # ระบุ Python เอง / Choose Python explicitly
@@ -51,11 +55,13 @@ python3 scripts/install-app.py --intel
 .venv-app/bin/python -m phimthai
 ```
 
-Qwen 0.6B ดาวน์โหลดประมาณ 1.89 GB และใช้ RAM สูงสุดราว 5.3–6 GB ในชุดเสียงทดสอบ ควรเผื่อ RAM ให้เดสก์ท็อปและโปรแกรมอื่นด้วย โมเดลขนาดใหญ่ใช้พื้นที่และ RAM เพิ่ม
+Typhoon ASR Realtime เป็นโมเดลภาษาไทยประมาณ 115 ล้านพารามิเตอร์ ดาวน์โหลดประมาณ 462 MB และใช้สิทธิ์ CC-BY-4.0 เลือก Qwen เพิ่มเมื่อต้องการภาษาอังกฤษหรือภาษาผสม โดย Qwen 0.6B ดาวน์โหลดประมาณ 1.89 GB และเคยใช้ RAM สูงสุดราว 5.3–6 GiB ในชุดเสียงทดสอบ ควรเผื่อ RAM ให้เดสก์ท็อปและโปรแกรมอื่นด้วย
+
+ค่าเริ่มต้น CPU threads ใช้ครบตามจำนวน logical CPU ของเครื่อง ปรับลดได้ในตั้งค่า และเก็บค่าที่ผู้ใช้บันทึกไว้ ช่วงประมวลผล worker ใช้จำนวนเธรดนี้กับ PyTorch และไลบรารีคำนวณ เมื่อคิวงานว่างหรือกดยกเลิก แอปปิด worker ทันทีเพื่อคืน RAM และหยุดเธรดคำนวณ งานถัดไปต้องโหลดโมเดลเข้า RAM ใหม่ แต่ไม่ต้องดาวน์โหลดใหม่ แอปไม่ขอหรือเปลี่ยน Power profile ของระบบ
 
 ## เริ่มใช้ / First run
 
-1. เปิดแอป ระบบเริ่มดาวน์โหลด **Qwen3-ASR 0.6B ประมาณ 1.89 GB** และแสดงความคืบหน้า กด **หยุดดาวน์โหลด** หากยังไม่พร้อม แล้วกด **โหลดโมเดลต่อ** ภายหลังได้
+1. เปิดแอปจากซอร์สปัจจุบัน ระบบเริ่มดาวน์โหลด **Typhoon ASR Realtime ประมาณ 462 MB** และแสดงความคืบหน้า กด **หยุดดาวน์โหลด** หากยังไม่พร้อม แล้วกด **โหลดโมเดลต่อ** ภายหลังได้ ส่วน Qwen ดาวน์โหลดเองได้ในหน้าโมเดล
 2. ระบบเตรียม `Meta+H` และ `Meta+Shift+H` พร้อมขอสิทธิ์วางข้อความ **ตอบหน้าขอสิทธิ์ของเดสก์ท็อป** แอปแสดงว่าพร้อมเมื่อได้รับผลอนุญาตจริง หากปฏิเสธหรือปุ่มชนกับแอปอื่น ให้แก้ในหน้าตั้งค่า
 3. เมื่อโมเดลพร้อม ไปที่ **ตั้งค่า** เลือกไมค์ กด **ทดสอบไมค์ 5 วินาที** และดูระดับเสียง
 4. เลือกช่องข้อความปลายทาง กด `Meta+H` พูด แล้วกดอีกครั้งเพื่อหยุด ค่าเริ่มต้นสำหรับการติดตั้งใหม่จะวางทันทีเมื่อถอดเสร็จและมีสิทธิ์วาง Popup เล็กด้านซ้ายแสดง Listening → Thinking → Typing โดยไม่แย่งโฟกัส
@@ -93,7 +99,8 @@ Editor รองรับ Undo การตั้งค่าใหม่ใช�
 
 | Model | การใช้งานและผลทดสอบ / Status |
 | --- | --- |
-| Qwen3-ASR 0.6B | ไทย อังกฤษ และภาษาผสม; CPU ผ่านการทดสอบจริง เป็นค่าเริ่มต้น |
+| Typhoon ASR Realtime · เบาที่สุด | โมเดลภาษาไทยจากรุ่น 1.0; ค่าเริ่มต้น ดาวน์โหลดอัตโนมัติประมาณ 462 MB |
+| Qwen3-ASR 0.6B · ดีที่สุด · Optional | ไทย อังกฤษ และภาษาผสม; CPU ผ่านการทดสอบจริง เลือกดาวน์โหลดเพิ่ม |
 | Qwen3-ASR 1.7B | ตัวเลือกใหญ่ขึ้น ~4.71 GB; ยังไม่ได้ยืนยัน inference บนเครื่องทดสอบนี้ |
 | Whisper Tiny / Turbo INT8, OpenVINO | CPU ผ่านแล้ว; Intel GPU/NPU ต้องทดสอบกับฮาร์ดแวร์ที่รองรับ; Tiny แม่นภาษาไทยต่ำในชุดทดสอบ |
 | Whisper Turbo Q5, Vulkan | Radeon 840M ผ่านจริง พร้อม CPU สำรองที่ใช้โมเดลเดิม; ต้องติดตั้ง runtime เพิ่ม |
@@ -139,7 +146,7 @@ python3 scripts/install-app.py
 | ไม่พบคำพูดทั้งที่มีเสียง | ลองปิด VAD ใน Settings และตรวจระดับไมค์ |
 | โหลดค้างหรือไฟล์เสีย | กด Cancel download แล้ว Download or repair ต่อได้ |
 | วางหรือปุ่มลัดไม่ได้ | หน้าตั้งค่า → เปิดใช้ปุ่มลัด / อนุญาตวางข้อความ; KDE ใช้ปุ่มลัด native ส่วนสิทธิ์วางต้องตอบ portal ใช้คัดลอกได้หาก portal ไม่รองรับ |
-| ช้าหรือ RAM ไม่พอ | ใช้ Qwen 0.6B, CPU 6 threads หรือน้อยกว่า และหลีกเลี่ยงโหลดหลายโมเดลพร้อมกัน |
+| ช้าหรือ RAM ไม่พอ | ใช้ Typhoon ค่าเริ่มต้นสำหรับภาษาไทย แอปคืนโมเดลจาก RAM เมื่องานจบ; หากเลือก Qwen บน CPU ให้ลองลดเธรดตามผลวัดด้านล่าง |
 
 Qt แบบ native มีปัญหาตรวจไมค์หลุดในบางรุ่น แอปจึงใช้ `pactl` ติดตามไมค์ที่เลือก และตรวจซ้ำก่อนส่งเสียงเข้า ASR หากไมค์หายหรือการตรวจล้มเหลว จะยกเลิกการบันทึกชุดนั้น การถอด/เสียบไมค์จริงและการพักเครื่องยังต้องทดสอบเพิ่มตามฮาร์ดแวร์
 

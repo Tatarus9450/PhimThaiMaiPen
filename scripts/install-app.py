@@ -113,14 +113,14 @@ def main():
         run([system_python, "-m", "venv", environment])
     python = environment / "bin/python"
     find_python(str(python))
-    run([python, "-m", "pip", "install", "--upgrade", "torch==2.11.0+cpu", "--index-url", "https://download.pytorch.org/whl/cpu"])
+    run([python, "-m", "pip", "install", "--upgrade", "torch==2.11.0+cpu", "torchaudio==2.11.0+cpu", "--index-url", "https://download.pytorch.org/whl/cpu"])
     run([python, "-m", "pip", "install", "--upgrade", "-r", ROOT / "packaging/requirements-app.txt"])
     install_qwen(python)
     if args.intel:
         run([python, "-m", "pip", "install", "openvino-genai==2026.3.1.0"])
     run([python, "-m", "pip", "install", "--no-deps", "--no-build-isolation", ROOT])
     run([python, "-m", "pip", "check"])
-    run([python, "-c", "from qwen_asr import Qwen3ASRModel; from transformers import MarianMTModel, MarianTokenizer; import phimthai.app; print('ASR, translation and GUI imports passed')"])
+    run([python, "-c", "from nemo.collections.asr.models import ASRModel; from qwen_asr import Qwen3ASRModel; from transformers import MarianMTModel, MarianTokenizer; import phimthai.app; print('Typhoon, optional Qwen, translation and GUI imports passed')"])
     if not args.no_launcher:
         data_home = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
         launcher, desktop = install_launchers(python, data_home)

@@ -1,0 +1,462 @@
+{
+  "date": "2026-09-22",
+  "scope": "Native installed runtime and owned Qt windows; no physical microphone or destination-app paste tested here; no new Flatpak bundle built",
+  "worker": {
+    "model": "typhoon-realtime",
+    "threads": 12,
+    "profile": "smart",
+    "vad": true,
+    "offline": true,
+    "peak_rss_mib": 1629.28515625,
+    "cpu_seconds": 15.06,
+    "sample": "10026868752543983818.wav",
+    "sample_sha256": "9f76647f34cd1b5c46386b220762264ba413ac97c2748d9ab621db4d70d9a7d6",
+    "installed_module": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai/app.py",
+    "pid": 36586,
+    "seconds": 7.515449492999323,
+    "ok": true,
+    "text": "สิ่งนี้เรียกว่าค่าพีเฮชของสารเคมีคุณสามารถสร้างตัวระบุได้โดยใช้น้ํากะหล่ําปีแดง",
+    "processing_seconds": 0.2411082639991946,
+    "backend": "typhoon",
+    "worker_released": true,
+    "pid_gone": true
+  },
+  "installed_assets": {
+    "installed_directory": "/home/task/Documents/PhimThaiMaiPen/.venv-app/lib/python3.11/site-packages/phimthai",
+    "source_files_match": [
+      "app.py",
+      "appearance.py",
+      "jobs.py",
+      "models.py",
+      "settings.py",
+      "worker.py",
+      "assets/io.github.tatarus9450.PhimThaiMaiPen.png",
+      "assets/glass-chevron-down.svg",
+      "assets/glass-chevron-up.svg"
+    ],
+    "desktop_icon": "/home/task/.local/share/icons/hicolor/512x512/apps/io.github.tatarus9450.PhimThaiMaiPen.png",
+    "icon_sha256": "281b5fc5e8f1f32e4ab1de3cfdc0adae2ecbf1906959593079c4a80b452381c7",
+    "scope_note": "The installed working copy retains pre-existing local paste/HUD fixes. Those unrelated changes are excluded from the published tree and were tested separately in the 170-test working-copy run."
+  },
+  "ui": {
+    "backend": "wayland",
+    "cases": 32,
+    "geometry_issues": 0,
+    "states": [
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "models",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "settings",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "models",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "settings",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": false,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "models",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "settings",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "models",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "settings",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "dark",
+        "reduced_transparency": true,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "models",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "settings",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "models",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "settings",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": false,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "models",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "settings",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1560,
+          1140
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "transcript",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "models",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "settings",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      },
+      {
+        "theme": "light",
+        "reduced_transparency": true,
+        "page": "diagnostics",
+        "screenshot_pixels": [
+          1230,
+          900
+        ]
+      }
+    ],
+    "fixtures": "Recording, desktop permission and model services are inert fixtures. Transcript screenshot contains the actual public-clip ASR output; model screenshot shows first-run state."
+  },
+  "contrast": [
+    {
+      "size": [
+        820,
+        600
+      ],
+      "reduced": false,
+      "background": {
+        "darkest": "#c8e3f8",
+        "brightest": "#fafdfe"
+      },
+      "contrast": {
+        "body": {
+          "darkest": 12.244,
+          "brightest": 15.923
+        },
+        "muted": {
+          "darkest": 4.914,
+          "brightest": 6.39
+        }
+      }
+    },
+    {
+      "size": [
+        1040,
+        760
+      ],
+      "reduced": false,
+      "background": {
+        "darkest": "#c8e3f8",
+        "brightest": "#fbfdfe"
+      },
+      "contrast": {
+        "body": {
+          "darkest": 12.244,
+          "brightest": 15.952
+        },
+        "muted": {
+          "darkest": 4.914,
+          "brightest": 6.402
+        }
+      }
+    },
+    {
+      "size": [
+        820,
+        600
+      ],
+      "reduced": true,
+      "background": {
+        "darkest": "#f5faff",
+        "brightest": "#f5faff"
+      },
+      "contrast": {
+        "body": {
+          "darkest": 15.5,
+          "brightest": 15.5
+        },
+        "muted": {
+          "darkest": 6.22,
+          "brightest": 6.22
+        }
+      }
+    },
+    {
+      "size": [
+        1040,
+        760
+      ],
+      "reduced": true,
+      "background": {
+        "darkest": "#f5faff",
+        "brightest": "#f5faff"
+      },
+      "contrast": {
+        "body": {
+          "darkest": 15.5,
+          "brightest": 15.5
+        },
+        "muted": {
+          "darkest": 6.22,
+          "brightest": 6.22
+        }
+      }
+    }
+  ],
+  "validation": {
+    "working_tree_application_tests": 170,
+    "legacy_backend_tests": 7,
+    "published_tree_tests": 159,
+    "published_tree_legacy_backend_tests": 7,
+    "published_tree_checks": [
+      "compileall",
+      "desktop-file-validate",
+      "bash -n scripts/build-release-flatpak.sh",
+      "git diff --cached --check"
+    ]
+  },
+  "logo": {
+    "generator": "built-in ImageGen",
+    "reference": "https://github.com/user-attachments/assets/29660b40-78aa-4a22-9727-46f81606c7ef",
+    "background_removal": "Pillow/SciPy; explicitly authorized after two opaque checkerboard outputs",
+    "master": "docs/branding/penguin-microphone-transparent.png",
+    "alpha_min": 0,
+    "alpha_max": 255,
+    "visual_checks": [
+      "white",
+      "charcoal",
+      "light blue",
+      "24px",
+      "32px",
+      "48px",
+      "64px"
+    ]
+  },
+  "twin_audit": {
+    "removed_patterns": [
+      "six-thread default cap",
+      "five-minute idle worker retention",
+      "unscoped deferred start_next callbacks"
+    ],
+    "power_profile_calls_in_app": 0,
+    "default_model_download": "typhoon-realtime",
+    "optional_qwen": "explicit user download only"
+  }
+}

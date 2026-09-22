@@ -142,10 +142,17 @@ def load_model() -> None:
     else:
         import nemo.collections.asr as nemo_asr
 
-        MODEL = nemo_asr.models.ASRModel.from_pretrained(
-            model_name=model_name,
-            map_location=DEVICE,
-        )
+        local = Path(model_name)
+        if local.is_dir():
+            local = local / "typhoon-asr-realtime.nemo"
+        if local.is_file():
+            MODEL = nemo_asr.models.ASRModel.restore_from(
+                restore_path=str(local), map_location=DEVICE,
+            )
+        else:
+            MODEL = nemo_asr.models.ASRModel.from_pretrained(
+                model_name=model_name, map_location=DEVICE,
+            )
         MODEL.eval()
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:

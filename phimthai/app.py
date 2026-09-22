@@ -25,7 +25,7 @@ from .devices import inventory, openvino_devices
 from .feedback import DictationFeedback
 from .jobs import JobController
 from .models import CATALOG, installed_size, local_model, model_dir, refresh_catalog, remove
-from .settings import Settings, data_dir, load_settings, save_settings
+from .settings import DEFAULT_MODEL, Settings, data_dir, load_settings, save_settings
 
 PROFILE_NAMES = {"smart": "Smart Mix", "raw": "Raw", "th_to_eng": "TH → ENG"}
 BETA_WARNING = "GPU / NPU · Beta\nฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน\nแนะนำให้ใช้ CPU สำหรับการถอดเสียงทั่วไป"
@@ -135,9 +135,9 @@ class MainWindow(QMainWindow):
         if self.settings.model_setup in {"pending", "downloading"}:
             if local_model(self.settings.model) is not None:
                 self.save_setup(model_setup="complete")
-            elif self.settings.model == "qwen-0.6b":
+            elif self.settings.model == DEFAULT_MODEL:
                 if self.save_setup(model_setup="downloading"):
-                    self.download_model(model_id="qwen-0.6b")
+                    self.download_model(model_id=DEFAULT_MODEL)
         self.desktop_starting = True
         self.continue_desktop_setup()
 
@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
         self.onboarding.setObjectName("onboarding")
         first_run = QVBoxLayout(self.onboarding)
         first_run.setContentsMargins(14, 12, 14, 12)
-        self.setup_message = QLabel("เริ่มต้นครั้งแรก · ระบบจะดาวน์โหลด Qwen3-ASR 0.6B ประมาณ 1.89 GB ให้อัตโนมัติ\nดาวน์โหลดเสร็จแล้วใช้แบบออฟไลน์ได้ ภายหลังลบหรือเปลี่ยนโมเดลได้ในหน้าโมเดล")
+        self.setup_message = QLabel("เริ่มต้นครั้งแรก · ระบบจะดาวน์โหลด Typhoon ASR Realtime ประมาณ 462 MB ให้อัตโนมัติ\nดาวน์โหลดเสร็จแล้วใช้แบบออฟไลน์ได้ เลือกโหลด Qwen เพิ่มได้ในหน้าโมเดล")
         self.setup_message.setObjectName("setupMessage")
         self.setup_message.setWordWrap(True)
         first_run.addWidget(self.setup_message)
@@ -452,10 +452,14 @@ class MainWindow(QMainWindow):
         form.addRow("รูปแบบข้อความ", self.profile)
         self.language = self.combo([("อัตโนมัติ · ไทย + English", "auto"), ("ภาษาไทย", "Thai"), ("English", "English")], self.settings.language)
         form.addRow("ภาษาที่พูด", self.language)
+        self.language_hint = QLabel("Typhoon รองรับเสียงภาษาไทย · ถ้าพูดอังกฤษหรือผสมสองภาษา ให้เลือก Qwen ในหน้าโมเดล")
+        self.language_hint.setWordWrap(True)
+        self.language_hint.setObjectName("muted")
+        form.addRow(self.language_hint)
         self.device = self.combo([("อัตโนมัติ · CPU แนะนำ", "auto"), ("CPU · แนะนำ", "cpu"), ("GPU · Beta", "gpu"), ("NPU · Beta", "npu")], self.settings.device)
         form.addRow("ประมวลผลด้วย", self.device)
         for value in ("gpu", "npu"):
-            self.device.setItemData(self.device.findData(value), QBrush(QColor("#ff9b9b")), Qt.ItemDataRole.ForegroundRole)
+            self.device.setItemData(self.device.findData(value), QBrush(QColor("#9b2c39")), Qt.ItemDataRole.ForegroundRole)
         self.beta_warning = QLabel(BETA_WARNING)
         self.beta_warning.setWordWrap(True)
         self.beta_warning.setObjectName("betaWarning")
@@ -1051,14 +1055,15 @@ class MainWindow(QMainWindow):
             size = installed_size(key)
             size_text = f"{size / 1e9:.2f} GB" if size >= 1e9 else f"{size / 1e6:.0f} MB"
             status = f"พร้อมใช้ · {size_text}" if size else "ยังไม่ได้ดาวน์โหลด"
-            self.model_list.addItem(f"{spec.name}\n{status}" + (" · เลือกอยู่" if key == self.settings.model else ""))
+            tags = " · " + " · ".join(spec.tags) if spec.tags else ""
+            self.model_list.addItem(f"{spec.name}{tags}\n{status}" + (" · เลือกอยู่" if key == self.settings.model else ""))
         self.model_list.setCurrentRow(min(max(0, current), len(CATALOG) - 1))
 
     def model_details(self, _index):
         spec = CATALOG[self.selected_model()]
         from .performance import measurements
         rates = measurements().get(spec.id, {})
-        formats = {"qwen": "SafeTensors", "openvino": "OpenVINO IR · INT8", "fastflowlm": "Q4NX", "marian": "PyTorch + SentencePiece", "vulkan": "GGML · Q5"}
+        formats = {"typhoon": "NeMo · FastConformer", "qwen": "SafeTensors", "openvino": "OpenVINO IR · INT8", "fastflowlm": "Q4NX", "marian": "PyTorch + SentencePiece", "vulkan": "GGML · Q5"}
         storage = (f"นำเข้าจากโฟลเดอร์ · ใช้พื้นที่ {installed_size(spec.id) / 1e9:.2f} GB"
                    if spec.origin == "local" else f"ดาวน์โหลดประมาณ {spec.download_gb:.2f} GB")
         self.model_description.setText(f"{storage} · หน่วยความจำประมาณ {spec.memory_gb} GB\nภาษา: {', '.join(spec.languages)}\nสิทธิ์การใช้งาน: {spec.license}")
@@ -1068,6 +1073,12 @@ class MainWindow(QMainWindow):
 
     def refresh_device_choices(self):
         spec = CATALOG[self.settings.model]
+        thai_only = spec.backend == "typhoon"
+        self.language.setItemText(self.language.findData("auto"),
+                                  "อัตโนมัติ · ภาษาไทย" if thai_only else "อัตโนมัติ · ไทย + English")
+        self.language.setItemText(self.language.findData("English"),
+                                  "English · ต้องเลือกโมเดลอื่น" if thai_only else "English")
+        self.language_hint.setVisible(thai_only)
         labels = {"openvino": "Intel GPU (OpenVINO)", "vulkan": "Hardware GPU (Vulkan)"}
         self.device.setItemText(self.device.findData("gpu"), labels.get(spec.backend, "GPU (CUDA)") + " · Beta")
         from .fastflowlm_backend import available
@@ -1091,7 +1102,7 @@ class MainWindow(QMainWindow):
                 return
             self.jobs.stop_worker()
         self.importing = False
-        if model_id == "qwen-0.6b" and self.settings.model_setup in {"pending", "paused", "downloading"}:
+        if model_id == self.settings.model and self.settings.model_setup in {"pending", "paused", "downloading"}:
             if not self.save_setup(model_setup="downloading"):
                 return
         self.downloading_model = model_id
@@ -1176,7 +1187,7 @@ class MainWindow(QMainWindow):
             except OSError as exc:
                 self.download_failure = f"ล้างไฟล์นำเข้าชั่วคราวไม่สำเร็จ: {exc}"
                 self.download_status.setText(self.download_failure)
-        if model_id == "qwen-0.6b" and self.settings.model_setup == "downloading" and (not self.quitting or not code):
+        if model_id == self.settings.model and self.settings.model_setup == "downloading" and (not self.quitting or not code):
             self.save_setup(model_setup="complete" if not code else "paused")
         self.importing = False
         self.refresh_models()
@@ -1240,9 +1251,9 @@ class MainWindow(QMainWindow):
         if QMessageBox.question(self, "Remove model", "Remove downloaded files for this model? You can download them again.") == QMessageBox.StandardButton.Yes:
             self.jobs.stop_worker()
             if model_id == self.settings.model and CATALOG[model_id].origin == "local":
-                if not self.save_setup(model="qwen-0.6b", device="auto", model_setup="skipped"):
+                if not self.save_setup(model=DEFAULT_MODEL, device="auto", model_setup="skipped"):
                     return
-            elif model_id == "qwen-0.6b":
+            elif model_id == self.settings.model:
                 if not self.save_setup(model_setup="skipped"):
                     return
             remove(model_id)

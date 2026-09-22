@@ -9,7 +9,7 @@ from collections import deque
 from dataclasses import asdict
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal, Slot
 
 
 class JobController(QObject):
@@ -31,9 +31,6 @@ class JobController(QObject):
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.timeout)
-        self.idle_timer = QTimer(self)
-        self.idle_timer.setSingleShot(True)
-        self.idle_timer.timeout.connect(self.stop_worker)
 
     @property
     def busy(self):
@@ -51,10 +48,10 @@ class JobController(QObject):
         if self.active:
             return
         if not self.pending:
-            if self.process:
-                self.idle_timer.start(300_000)
+            # Keep the model only while there is work. Releasing the owned
+            # process also releases Torch/accelerator memory and thread pools.
+            self.stop_worker()
             return
-        self.idle_timer.stop()
         self.active = self.pending.popleft()
         inference_keys = ("model", "device", "language", "cpu_threads", "dictionary", "preference")
         signature = json.dumps({key: self.active["settings"][key] for key in inference_keys}, sort_keys=True)
@@ -67,16 +64,23 @@ class JobController(QObject):
             self.worker_temp = tempfile.TemporaryDirectory(prefix="worker-", dir=self.temp_root)
             environment = QProcessEnvironment.systemEnvironment()
             environment.insert("TMPDIR", self.worker_temp.name)
+            # Set library limits before imports, including inherited BLAS
+            # settings that would otherwise override the selected CPU budget.
+            threads = str(self.active["settings"]["cpu_threads"])
+            for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+                environment.insert(key, threads)
             process.setProcessEnvironment(environment)
             parameters = QProcess.UnixProcessParameters()
             parameters.flags = QProcess.UnixProcessFlag.CreateNewSession | QProcess.UnixProcessFlag.DisableCoreDumps
             process.setUnixProcessParameters(parameters)
-            process.started.connect(lambda: setattr(self, "worker_pid", int(process.processId())))
+            # QObject receivers avoid closures retaining the parent through a
+            # child being deleted during rapid worker teardown/recreation.
+            process.started.connect(self.worker_started)
             process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
-            process.readyReadStandardOutput.connect(lambda: self.read_output(process))
-            process.readyReadStandardError.connect(lambda: process.readAllStandardError())
-            process.finished.connect(lambda code, status: self.worker_finished(process, code))
-            process.errorOccurred.connect(lambda error: self.worker_error(process, error))
+            process.readyReadStandardOutput.connect(self.read_output)
+            process.readyReadStandardError.connect(self.read_error)
+            process.finished.connect(self.worker_finished)
+            process.errorOccurred.connect(self.worker_error)
             process.start(sys.executable, ["-m", self.worker_module])
         else:
             self.dispatch()
@@ -87,7 +91,19 @@ class JobController(QObject):
         if self.process is not None and self.active is not None:
             self.process.write((json.dumps(self.active, ensure_ascii=False) + "\n").encode())
 
-    def read_output(self, process):
+    @Slot()
+    def worker_started(self):
+        process = self.sender()
+        if process is self.process:
+            self.worker_pid = int(process.processId())
+
+    @Slot()
+    def read_error(self):
+        self.sender().readAllStandardError()
+
+    @Slot()
+    def read_output(self):
+        process = self.sender()
         if process is not self.process:
             return
         self.buffer += bytes(process.readAllStandardOutput())
@@ -112,14 +128,18 @@ class JobController(QObject):
                     self.result.emit(response)
                 else:
                     self.failed.emit(response.get("error", "Worker failed"))
-                QTimer.singleShot(0, self.start_next)
+                QTimer.singleShot(0, self, self.start_next)
 
-    def worker_error(self, process, error):
+    @Slot(QProcess.ProcessError)
+    def worker_error(self, error):
+        process = self.sender()
         if process is self.process and error == QProcess.ProcessError.FailedToStart:
             self.cancel()
             self.failed.emit("Could not start the speech worker")
 
-    def worker_finished(self, process, code):
+    @Slot(int, QProcess.ExitStatus)
+    def worker_finished(self, code, status):
+        process = self.sender()
         if process is not self.process:
             return
         self.process = None
@@ -128,14 +148,12 @@ class JobController(QObject):
         self.signature = None
         self.buffer = b""
         self.timer.stop()
-        self.idle_timer.stop()
         if self.active:
             self.active = None
             self.failed.emit(f"Speech worker stopped unexpectedly ({code}). You can retry.")
-        QTimer.singleShot(0, self.start_next)
+        QTimer.singleShot(0, self, self.start_next)
 
     def stop_worker(self):
-        self.idle_timer.stop()
         process, self.process = self.process, None
         self.buffer = b""
         if process:

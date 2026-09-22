@@ -25,13 +25,19 @@ class ModelSpec:
     status: str = "experimental"
     files: tuple = ()
     origin: str = "catalog"
+    tags: tuple = ()
 
 
 CATALOG = {
+    "typhoon-realtime": ModelSpec("typhoon-realtime", "Typhoon ASR Realtime", "scb10x/typhoon-asr-realtime",
+                           "2c58a30ba9a3bf92d095a5df91bec6996f04c3a1", 4, license="CC-BY-4.0", backend="typhoon",
+                           languages=("Thai",), download_gb=0.462, files=("typhoon-asr-realtime.nemo",),
+                           status="Default Thai model from version 1.0", tags=("เบาที่สุด", "ค่าเริ่มต้น")),
     "qwen-0.6b": ModelSpec("qwen-0.6b", "Qwen3-ASR 0.6B", "Qwen/Qwen3-ASR-0.6B",
-                           "5eb144179a02acc5e5ba31e748d22b0cf3e303b0", 7, download_gb=1.89, status="CPU tested on Fedora KDE"),
+                           "5eb144179a02acc5e5ba31e748d22b0cf3e303b0", 7, download_gb=1.89, status="CPU tested on Fedora KDE",
+                           tags=("ดีที่สุด", "Optional")),
     "qwen-1.7b": ModelSpec("qwen-1.7b", "Qwen3-ASR 1.7B", "Qwen/Qwen3-ASR-1.7B",
-                           "7278e1e70fe206f11671096ffdd38061171dd6e5", 12, download_gb=4.71),
+                           "7278e1e70fe206f11671096ffdd38061171dd6e5", 12, download_gb=4.71, tags=("ดีที่สุด", "Optional")),
     "whisper-tiny-ov": ModelSpec("whisper-tiny-ov", "Whisper Tiny INT8 · OpenVINO", "OpenVINO/whisper-tiny-int8-ov",
                            "a850762d97243dee30f46ca309720541af619ab0", 2, backend="openvino", languages=("Thai", "English", "multilingual"), devices=("cpu", "gpu", "npu"), download_gb=0.048, status="CPU tested; low Thai accuracy in initial samples. Intel NPU unverified"),
     "whisper-turbo-ov": ModelSpec("whisper-turbo-ov", "Whisper Turbo INT8 · OpenVINO", "OpenVINO/whisper-large-v3-turbo-int8-ov",
@@ -68,6 +74,8 @@ def digest(path, algorithm="sha256", git_blob=False):
 
 
 def required_files(files, backend="qwen"):
+    if backend == "typhoon":
+        return "typhoon-asr-realtime.nemo" in files
     if backend == "vulkan":
         return "ggml-large-v3-turbo-q5_0.bin" in files
     if backend == "fastflowlm":

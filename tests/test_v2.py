@@ -37,11 +37,17 @@ class LifecycleTests(unittest.TestCase):
     def tearDown(self):
         self.jobs.cancel()
 
-    def test_100_sequential_jobs_keep_identity_and_one_worker(self):
+    def test_100_chained_jobs_keep_identity_and_one_worker(self):
         expected = []
-        for i in range(100):
-            expected.append(self.jobs.submit(Settings(), action="transcribe", text=f"งาน {i}"))
-            until(lambda: len(self.results) == i + 1)
+
+        def submit_next(_=None):
+            index = len(expected)
+            if index < 100:
+                expected.append(self.jobs.submit(Settings(), action="transcribe", text=f"งาน {index}"))
+
+        self.jobs.result.connect(submit_next)
+        submit_next()
+        until(lambda: len(self.results) == 100 and self.jobs.process is None)
         self.assertEqual([r["id"] for r in self.results], expected)
         self.assertEqual([r["text"] for r in self.results], [f"งาน {i}" for i in range(100)])
         self.assertEqual(len({r["pid"] for r in self.results}), 1)
@@ -98,6 +104,17 @@ class ClipboardTests(unittest.TestCase):
 
 
 class SettingsAndTranslationTests(unittest.TestCase):
+    def test_fresh_settings_use_all_cpus_and_saved_limit_is_respected(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}), \
+             patch("phimthai.settings.os.cpu_count", return_value=12):
+            self.assertEqual(Settings().cpu_threads, 12)
+            self.assertEqual(load_settings().cpu_threads, 12)
+            save_settings(Settings(cpu_threads=4))
+            self.assertEqual(load_settings().cpu_threads, 4)
+        with patch("phimthai.settings.os.cpu_count", return_value=None):
+            self.assertEqual(Settings().cpu_threads, 1)
+
     def test_settings_roundtrip_and_invalid_value(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}):
             save_settings(Settings(dictionary="ชื่อ\tName"))

@@ -10,7 +10,7 @@ from dbus_next import Variant
 
 from phimthai import portals
 from phimthai.devices import select_device
-from phimthai.settings import Settings, config_path, load_settings, save_settings
+from phimthai.settings import DEFAULT_MODEL, Settings, config_path, load_settings, save_settings
 from tests.test_app_review import IsolatedWindow
 
 
@@ -32,10 +32,24 @@ class DownloadSetupTests(IsolatedWindow, unittest.TestCase):
         self.window.start_first_run()
         self.window.start_first_run()
         self.process.start.assert_called_once()
-        self.assertEqual(self.process.start.call_args.args[1], ["-m", "phimthai.models", "qwen-0.6b"])
-        self.assertIn("Qwen3-ASR 0.6B", self.window.setup_message.text())
-        self.assertIn("1.89", self.window.setup_message.text())
+        self.assertEqual(self.process.start.call_args.args[1], ["-m", "phimthai.models", "typhoon-realtime"])
+        self.assertIn("Typhoon ASR Realtime", self.window.setup_message.text())
+        self.assertIn("0.46", self.window.setup_message.text())
         self.assertEqual(load_settings().model_setup, "downloading")
+
+    def test_qwen_is_optional_and_model_tags_are_visible(self):
+        labels = [self.window.model_list.item(index).text() for index in range(self.window.model_list.count())]
+        self.assertIn("เบาที่สุด", next(label for label in labels if "Typhoon ASR Realtime" in label))
+        for name in ("Qwen3-ASR 0.6B", "Qwen3-ASR 1.7B"):
+            label = next(label for label in labels if name in label)
+            self.assertIn("ดีที่สุด", label)
+            self.assertIn("Optional", label)
+        self.window.settings = replace(self.window.settings, model="qwen-0.6b", model_setup="skipped")
+        self.window.start_first_run()
+        self.process.start.assert_not_called()
+        self.window.download_model(model_id="qwen-0.6b")
+        self.process.start.assert_called_once()
+        self.assertEqual(self.process.start.call_args.args[1][-1], "qwen-0.6b")
 
     def test_cancel_stays_paused_on_relaunch_and_manual_resume_works(self):
         self.window.start_first_run()
@@ -48,7 +62,7 @@ class DownloadSetupTests(IsolatedWindow, unittest.TestCase):
         self.window.settings = load_settings()
         self.window.start_first_run()
         self.process.start.assert_not_called()
-        self.window.download_model(model_id="qwen-0.6b")
+        self.window.download_model(model_id=DEFAULT_MODEL)
         self.process.start.assert_called_once()
         self.assertEqual(load_settings().model_setup, "downloading")
 
@@ -58,7 +72,7 @@ class DownloadSetupTests(IsolatedWindow, unittest.TestCase):
         self.window.download_finished(9, None)
         self.assertEqual(load_settings().model_setup, "downloading")
         self.window.quitting = False
-        self.window.download_model(model_id="qwen-0.6b")
+        self.window.download_model(model_id=DEFAULT_MODEL)
         self.process.readAllStandardOutput.return_value = b'{"error":"Network unavailable"}\n'
         self.window.download_finished(1, None)
         self.assertEqual(load_settings().model_setup, "paused")
@@ -80,7 +94,7 @@ class DownloadSetupTests(IsolatedWindow, unittest.TestCase):
 
     def test_failed_settings_write_never_leaves_a_phantom_download(self):
         with patch("phimthai.app.save_settings", side_effect=OSError("disk full")):
-            self.window.download_model(model_id="qwen-0.6b")
+            self.window.download_model(model_id=DEFAULT_MODEL)
         self.assertIsNone(self.window.downloading_model)
         self.assertIsNone(self.window.download_process)
         self.process.start.assert_not_called()
@@ -207,6 +221,24 @@ class DesktopSetupTests(IsolatedWindow, unittest.TestCase):
 
 
 class DefaultsAndBetaTests(IsolatedWindow, unittest.TestCase):
+    def test_language_labels_follow_selected_model_without_changing_choice(self):
+        self.window.refresh_device_choices()
+        auto = self.window.language.findData("auto")
+        english = self.window.language.findData("English")
+        self.assertNotIn("English", self.window.language.itemText(auto))
+        self.assertFalse(self.window.language_hint.isHidden())
+        self.window.language.setCurrentIndex(english)
+        self.window.settings = replace(self.window.settings, model="qwen-0.6b")
+        self.window.refresh_device_choices()
+        self.assertIn("English", self.window.language.itemText(auto))
+        self.assertTrue(self.window.language_hint.isHidden())
+        self.assertEqual(self.window.language.currentData(), "English")
+        self.window.settings = replace(self.window.settings, model=DEFAULT_MODEL)
+        self.window.refresh_device_choices()
+        self.assertNotIn("English", self.window.language.itemText(auto))
+        self.assertIn("โมเดลอื่น", self.window.language.itemText(english))
+        self.assertEqual(self.window.language.currentData(), "English")
+
     def test_new_defaults_and_old_settings_migration(self):
         self.assertEqual(Settings().paste_mode, "immediate")
         self.assertTrue(Settings().remember_desktop)
@@ -234,7 +266,7 @@ class DefaultsAndBetaTests(IsolatedWindow, unittest.TestCase):
         self.assertIn("ฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน", self.window.beta_warning.text())
         self.assertEqual(self.window.beta_warning.objectName(), "betaWarning")
         from phimthai.appearance import _STYLESHEET
-        self.assertIn("QLabel#betaWarning { color: #ff9b9b", _STYLESHEET)
+        self.assertIn("QLabel#betaWarning { color: #9b2c39", _STYLESHEET)
 
     def test_partial_shortcuts_changed_preserves_other_binding(self):
         client = portals.Portals()

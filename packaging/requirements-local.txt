@@ -1,5 +1,7 @@
 # Experimental local Flatpak only. Source-build modules remain a release gate.
 torch==2.11.0+cpu
+torchaudio==2.11.0+cpu
+nemo-toolkit[asr]==3.0.0
 PySide6==6.11.1
 dbus-next==0.2.3
 transformers==4.57.6

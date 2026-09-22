@@ -176,8 +176,8 @@ def main():
             report["version"] = phimthai.__version__
             defaults = Settings()
             report["defaults"] = {key: getattr(defaults, key) for key in ("model", "device", "profile", "language")}
-            require(report["defaults"] == {"model": "qwen-0.6b", "device": "auto", "profile": "smart", "language": "auto"},
-                    "Qwen 0.6B / Auto / Smart Mix defaults changed")
+            require(report["defaults"] == {"model": "typhoon-realtime", "device": "auto", "profile": "smart", "language": "auto"},
+                    "Typhoon / Auto / Smart Mix defaults changed")
             report["first_launch"] = {key: getattr(defaults, key) for key in
                                       ("model_setup", "desktop_setup_done", "remember_desktop", "paste_mode")}
             require(report["first_launch"] == {"model_setup": "pending", "desktop_setup_done": False,
@@ -194,14 +194,14 @@ def main():
             report["dependencies"] = check_dependency_metadata()
             require(not report["dependencies"]["failures"], "Installed dependency metadata is inconsistent")
             report["versions"] = {name: metadata.version(name) for name in
-                                  ("PySide6", "shiboken6", "torch", "qwen-asr", "transformers", "dbus-next", "soundfile")}
+                                  ("PySide6", "shiboken6", "torch", "nemo-toolkit", "qwen-asr", "transformers", "dbus-next", "soundfile")}
             report["stage"] = "imports"
             report["available_memory_mib"] = available_memory_mib()
             if not args.imports_only:
                 require(report["available_memory_mib"] >= args.minimum_available_mib,
                         "Insufficient available RAM for the bounded Qwen CPU check")
             with silence_backend_output():
-                for name in ("phimthai.app", "qwen_asr", "webrtcvad", "soundfile", "torch", "dbus_next"):
+                for name in ("phimthai.app", "nemo.collections.asr", "qwen_asr", "webrtcvad", "soundfile", "torch", "dbus_next"):
                     importlib.import_module(name)
                 from PySide6.QtCore import qVersion
                 from PySide6.QtMultimedia import QAudioSource, QAudioOutput, QMediaPlayer
@@ -233,7 +233,9 @@ def main():
                                      "limitation": "Two known public clips; functional smoke, not representative accuracy certification"}
                 report["samples"] = []
                 from phimthai.worker import run
-                settings = replace(defaults, cpu_threads=args.threads)
+                # This historical optional-Qwen accuracy proof intentionally
+                # uses its supplied Qwen model, independently of app defaults.
+                settings = replace(defaults, model="qwen-0.6b", cpu_threads=args.threads)
                 for sample in SAMPLES:
                     report["stage"] = "inference_" + sample["language"].lower()
                     print(json.dumps({"stage": report["stage"]}), file=sys.stderr, flush=True)

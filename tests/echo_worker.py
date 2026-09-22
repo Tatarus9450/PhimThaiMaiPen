@@ -10,4 +10,6 @@ for line in sys.stdin:
     if request.get("crash"):
         os._exit(23)
     time.sleep(request.get("delay", 0))
-    print(json.dumps({"id": request["id"], "ok": True, "text": request.get("text", ""), "pid": os.getpid()}), flush=True)
+    print(json.dumps({"id": request["id"], "ok": not request.get("error"),
+                      "error": request.get("error", ""), "text": request.get("text", ""), "pid": os.getpid(),
+                      "environment": {key: os.environ.get(key) for key in request.get("environment_keys", [])}}), flush=True)

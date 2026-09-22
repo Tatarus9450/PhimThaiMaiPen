@@ -8,6 +8,7 @@ import time
 import unittest
 from dataclasses import asdict, replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 # Never connect these tests to a user's desktop clipboard or recording devices.
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from phimthai.app import MainWindow
 from phimthai.jobs import JobController
-from phimthai.models import CATALOG, local_model, model_dir
+from phimthai.models import CATALOG, download, local_model, model_dir
 from phimthai.settings import Settings, data_dir
 
 
@@ -55,6 +56,30 @@ class IsolatedSettingsTest(unittest.TestCase):
 
 
 class ModelIntegrityRegressionTests(IsolatedSettingsTest):
+    def test_typhoon_download_accepts_only_pinned_archive_and_verifies_integrity(self):
+        spec = CATALOG["typhoon-realtime"]
+        content = b"synthetic nemo archive; never loaded"
+        expected = hashlib.sha256(content).hexdigest()
+        sibling = SimpleNamespace(rfilename="typhoon-asr-realtime.nemo", size=len(content),
+                                  lfs=SimpleNamespace(sha256=expected))
+        ignored = SimpleNamespace(rfilename="unrelated.bin", size=100)
+        def fetch(repo, filename, *, revision, local_dir):
+            self.assertEqual((repo, revision), (spec.repo, spec.revision))
+            target = local_dir / filename
+            target.write_bytes(content)
+            return str(target)
+        events = []
+        with patch("huggingface_hub.HfApi") as api, \
+             patch("huggingface_hub.hf_hub_download", side_effect=fetch) as get:
+            api.return_value.model_info.return_value = SimpleNamespace(siblings=[sibling, ignored])
+            download(spec.id, events.append)
+        self.assertEqual(get.call_count, 1)
+        directory = model_dir(spec.id)
+        self.assertEqual(local_model(spec.id, verify=True), directory)
+        self.assertTrue(events[-1]["done"])
+        (directory / sibling.rfilename).write_bytes(b"x" * len(content))
+        self.assertIsNone(local_model(spec.id, verify=True))
+
     def setUp(self):
         super().setUp()
         self.model_id = "qwen-1.7b"
@@ -116,16 +141,53 @@ class JobSettingsRegressionTests(IsolatedSettingsTest):
         self.assertEqual(self.results[0]["pid"], self.results[1]["pid"])
 
     def test_idle_release_frees_worker_and_next_job_still_completes(self):
-        self.jobs.submit(Settings(), action="transcribe", text="before idle")
-        until(lambda: len(self.results) == 1 and self.jobs.idle_timer.isActive())
+        self.jobs.submit(Settings(), action="transcribe", text="before idle", delay=0.05)
         old_directory = Path(self.jobs.worker_temp.name)
-        self.jobs.idle_timer.timeout.emit()
-        self.assertIsNone(self.jobs.process)
+        until(lambda: len(self.results) == 1 and self.jobs.process is None)
+        old_pid = self.results[0]["pid"]
+        self.assertFalse(Path(f"/proc/{old_pid}").exists())
         self.assertFalse(old_directory.exists())
+        self.assertEqual(self.jobs.worker_pid, 0)
+        self.assertIsNone(self.jobs.worker_temp)
+        self.assertFalse(self.jobs.timer.isActive())
         self.jobs.submit(Settings(), action="transcribe", text="after idle")
-        until(lambda: len(self.results) == 2)
+        until(lambda: len(self.results) == 2 and self.jobs.process is None)
         self.assertEqual([item["text"] for item in self.results], ["before idle", "after idle"])
+        self.assertNotEqual(self.results[1]["pid"], old_pid)
         self.assertEqual(self.errors, [])
+
+    def test_worker_library_limits_follow_settings_without_changing_parent(self):
+        keys = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+        with patch.dict(os.environ, {key: "1" for key in keys}):
+            self.jobs.submit(Settings(), action="transcribe", environment_keys=keys)
+            until(lambda: len(self.results) == 1 and self.jobs.process is None)
+            self.assertEqual(self.results[0]["environment"], {key: str(os.cpu_count() or 1) for key in keys})
+            self.assertTrue(all(os.environ[key] == "1" for key in keys))
+
+    def test_failed_job_releases_worker_and_next_job_recovers(self):
+        self.jobs.submit(Settings(), action="transcribe", error="inference failed")
+        directory = Path(self.jobs.worker_temp.name)
+        until(lambda: bool(self.errors) and self.jobs.process is None)
+        self.assertEqual(self.errors, ["inference failed"])
+        self.assertFalse(directory.exists())
+        self.assertFalse(self.jobs.busy)
+        self.jobs.submit(Settings(), action="transcribe", text="recovered")
+        until(lambda: bool(self.results) and self.jobs.process is None)
+        self.assertEqual(self.results[0]["text"], "recovered")
+
+    def test_timeout_kills_worker_and_clears_queued_work(self):
+        self.jobs.submit(Settings(), action="transcribe", delay=60)
+        self.jobs.submit(Settings(), action="transcribe", text="must not run")
+        until(lambda: self.jobs.worker_pid != 0)
+        pid = self.jobs.worker_pid
+        directory = Path(self.jobs.worker_temp.name)
+        self.jobs.timer.start(20)
+        until(lambda: bool(self.errors))
+        self.assertIn("timed out", self.errors[0])
+        self.assertFalse(Path(f"/proc/{pid}").exists())
+        self.assertFalse(directory.exists())
+        self.assertFalse(self.jobs.busy)
+        self.assertEqual(self.results, [])
 
     def test_cancel_kills_descendant_and_removes_its_private_audio(self):
         report = self.root / "child-ready.json"

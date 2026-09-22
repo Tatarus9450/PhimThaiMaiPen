@@ -5,6 +5,8 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+DEFAULT_MODEL = "typhoon-realtime"
+
 
 def data_dir() -> Path:
     return Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "phimthai"
@@ -17,7 +19,7 @@ def config_path() -> Path:
 @dataclass
 class Settings:
     version: int = 2
-    model: str = "qwen-0.6b"
+    model: str = DEFAULT_MODEL
     device: str = "auto"
     language: str = "auto"
     profile: str = "smart"
@@ -34,7 +36,7 @@ class Settings:
     reduced_transparency: bool = False
     sound_feedback: bool = True
     popup_enabled: bool = True
-    cpu_threads: int = field(default_factory=lambda: min(6, os.cpu_count() or 1))
+    cpu_threads: int = field(default_factory=lambda: os.cpu_count() or 1)
     dictionary: str = ""
     vad: bool = True
 
@@ -60,7 +62,7 @@ class Settings:
 def load_settings() -> Settings:
     path = config_path()
     if not path.exists():
-        return Settings(cpu_threads=min(6, os.cpu_count() or 1))
+        return Settings()
     values = json.loads(path.read_text(encoding="utf-8"))
     if values.get("version", 2) != 2:
         raise ValueError("Settings were written by an unsupported application version")

@@ -1,6 +1,7 @@
 """Backend routing and profile regression checks; no model download required."""
 import unittest
 import tempfile
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,29 @@ from typhoon_backend import get_asr_backend
 
 
 class BackendTests(unittest.TestCase):
+    def test_typhoon_managed_archive_restores_locally_without_hub_access(self):
+        model = Mock()
+        asr_model = Mock()
+        asr_model.restore_from.return_value = model
+        modules = {"nemo": Mock(), "nemo.collections": Mock(),
+                   "nemo.collections.asr": Mock()}
+        modules["nemo"].collections = modules["nemo.collections"]
+        modules["nemo.collections"].asr = modules["nemo.collections.asr"]
+        modules["nemo.collections.asr"].models.ASRModel = asr_model
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "typhoon-asr-realtime.nemo"
+            archive.write_bytes(b"synthetic archive; never loaded")
+            with patch.dict(sys.modules, modules), \
+                 patch.dict(service.CONFIG, {"TYPHOON_ASR_BACKEND": "typhoon", "TYPHOON_MODEL": directory}), \
+                 patch.object(service, "MODEL", None), patch.object(service, "import_runtime_modules"), \
+                 patch.object(service, "resolve_device", return_value="cpu"), \
+                 patch.object(service, "TORCH", SimpleNamespace(inference_mode=nullcontext)), \
+                 patch.object(service, "transcribe_loaded"):
+                service.load_model()
+            asr_model.restore_from.assert_called_once_with(restore_path=str(archive), map_location="cpu")
+            asr_model.from_pretrained.assert_not_called()
+            model.eval.assert_called_once_with()
+
     def test_existing_typhoon_config_still_uses_nemo(self):
         self.assertEqual(get_asr_backend({"TYPHOON_MODEL": "scb10x/typhoon-asr-realtime"}), "typhoon")
         self.assertEqual(get_asr_backend({"TYPHOON_MODEL": "Qwen/Qwen3-ASR-0.6B"}), "qwen")

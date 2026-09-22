@@ -49,7 +49,7 @@ manifest = {
         "install -m755 /app/lib/plugins/multimedia/libffmpegmediaplugin.so /app/lib/python3.13/site-packages/PySide6/Qt/plugins/multimedia/libffmpegmediaplugin.so",
         "python3 -m pip install --no-index --no-deps --no-build-isolation --prefix=/app .",
         "python3 -m pip check",
-        "python3 -c \"from phimthai.settings import Settings; s = Settings(); assert s.model == 'qwen-0.6b' and s.profile == 'smart'\"",
+        "python3 -c \"from nemo.collections.asr.models import ASRModel; from phimthai.settings import Settings; s = Settings(); assert s.model == 'typhoon-realtime' and s.profile == 'smart'\"",
         f"install -Dm644 phimthai/assets/{APP_ID}.desktop /app/share/applications/{APP_ID}.desktop",
         f"install -Dm644 phimthai/assets/{APP_ID}.metainfo.xml /app/share/metainfo/{APP_ID}.metainfo.xml",
         f"install -Dm644 phimthai/assets/{APP_ID}.png /app/share/icons/hicolor/512x512/apps/{APP_ID}.png",

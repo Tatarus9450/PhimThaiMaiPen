@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Direct-download beta; PySide/Torch wheels, source-patched Qt and Qwen.
+# Direct-download beta; Typhoon and optional Qwen, source-patched Qt.
 # Requires the user-installed Flatpak runtimes pinned by flatpak-release.yml.
 # Builds a committed checkout in its own directory; never installs the app.
 set -euo pipefail
@@ -63,66 +63,181 @@ mkdir -p "$source_dir/.cache/flatpak-wheels"
 # Pin the complete Python closure, including transitive dependencies. A newly
 # introduced dependency must be reviewed and pinned before the build can pass.
 cat > "$source_dir/.cache/release-constraints.txt" <<'EOF'
+absl-py==2.5.0
 accelerate==1.12.0
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+aistore==1.26.0
+annotated-types==0.8.0
+antlr4-python3-runtime==4.9.3
+anyio==4.15.1
+attrs==26.1.0
+audioop-lts==0.2.2
+audioread==3.1.0
+braceexpand==0.1.7
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1
+click==8.5.0
+cloudpickle==3.1.2
+colorama==0.4.6
+cuda-bindings==13.4.2
+cuda-pathfinder==1.8.2
+cytoolz==1.1.0
+datasets==5.0.1
 dbus-next==0.2.3
+decorator==5.3.1
+dill==0.4.1
+einops==0.8.2
 filelock==3.32.6
-fsspec==2026.7.0
+frozenlist==1.8.0
+fsspec==2025.12.0
+googleapis-common-protos==1.75.3
+grpcio==1.84.0
+h11==0.16.0
 hf-xet==1.6.0
+httpcore==1.0.9
+httpx==0.28.1
 huggingface-hub==0.36.2
+humanize==4.16.0
+hydra-core==1.3.2
 idna==3.19
+indic-numtowords==1.1.0
+intervaltree==3.2.1
 jinja2==3.1.6
+joblib==1.6.0
+kaldialign==0.12.0
+lazy-loader==0.6
+lhotse==1.33.0
+librosa==0.11.0
+lightning==2.4.0
+lightning-utilities==0.15.3
+llvmlite==0.49.0
+lxml==6.1.3
+markdown==3.10.3
 markupsafe==3.0.3
+ml-dtypes==0.6.0
+more-itertools==11.1.0
 mpmath==1.3.0
+msgpack==1.2.2
+msgspec==0.21.1
+multidict==6.9.1
+multiprocess==0.70.19
+narwhals==2.26.0
+nemo-toolkit==3.0.0
 networkx==3.6.1
+numba==0.67.0
 numpy==2.4.6
+nv-one-logger-core==2.3.1
+nv-one-logger-pytorch-lightning-integration==2.3.1
+nv-one-logger-training-telemetry==2.3.1
+omegaconf==2.3.0
+onnx==1.23.0
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp-proto-common==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-proto==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-semantic-conventions==0.65b0
 openvino==2026.3.1
 openvino-genai==2026.3.1.0
 openvino-telemetry==2025.2.0
 openvino-tokenizers==2026.3.1.0
-packaging==26.3
+overrides==7.7.0
+packaging==24.2
+pandas==3.0.6
+pillow==12.3.0
+platformdirs==4.11.12
+pooch==1.9.0
+portalocker==4.4.0
+propcache==0.5.4
 protobuf==7.36.1
 psutil==7.2.2
+pyarrow==25.0.1
 pycparser==3.0
+pydantic==2.13.5
+pydantic-core==2.46.5
 pyside6==6.11.1
 pyside6-addons==6.11.1
 pyside6-essentials==6.11.1
+python-dateutil==2.9.0.post0
+pytorch-lightning==2.6.6
 pyyaml==6.0.3
 regex==2026.9.10
 requests==2.34.2
+sacrebleu==2.6.0
 safetensors==0.8.0
+scikit-learn==1.9.1
+scipy==1.17.1
 sentencepiece==0.2.2
 setuptools==81.0.0
 shiboken6==6.11.1
+six==1.17.0
+smart-open==8.0.1
+sortedcontainers==2.4.0
 soundfile==0.14.0
+soxr==1.1.0
+standard-aifc==3.13.0
+standard-chunk==3.13.0
+standard-sunau==3.13.0
+strenum==0.4.15
 sympy==1.14.0
+tabulate==0.10.0
+tenacity==9.1.4
+tensorboard==2.21.0
+tensorboard-data-server==0.7.2
+text-unidecode==1.3
+text2num==3.1.0
+threadpoolctl==3.7.0
 tokenizers==0.22.2
+toml==0.10.2
+toolz==1.1.0
 torch==2.11.0+cpu
+torchaudio==2.11.0+cpu
+torchmetrics==1.9.0
 tqdm==4.70.1
 transformers==4.57.6
 typing-extensions==4.16.0
+typing-inspection==0.4.4
 urllib3==2.7.0
+wandb==0.30.0
+webdataset==1.0.2
 webrtcvad-wheels==2.0.14
+werkzeug==3.1.8
 wheel==0.45.1
+whisper-normalizer==0.1.15
+wrapt==2.4.1
+xxhash==3.5.0
+yarl==1.25.1
 EOF
 
 # Resolve in the SDK's real CPython 3.13 environment, never the runner Python.
-# Torch uses only the official CPU host and a fixed wheel digest.
+# Torch/Torchaudio use the official CPU host and fixed wheel digests.
+# Hydra requires ANTLR 4.9.3, which has no upstream wheel. Build that one
+# pure-Python wheel from a checksum-pinned source with pinned build tools.
 flatpak run --user --filesystem="$work" --share=network --command=bash org.kde.Sdk//6.11 -c '
     set -euo pipefail
     cd "$1"
     python3 -c "import sys; assert sys.version_info[:2] == (3, 13)"
     python3 -m pip download --no-deps --dest .cache/flatpak-wheels \
-      "https://download.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl#sha256=45025d7752dbc6b4c784c03afaee9c5f19730ce084b2e43fc9a2fe1677d9ff86"
+      "https://download.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl#sha256=45025d7752dbc6b4c784c03afaee9c5f19730ce084b2e43fc9a2fe1677d9ff86" \
+      "https://download.pytorch.org/whl/cpu/torchaudio-2.11.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl#sha256=3c0175d0ed054bf0dc3b154a744b1a127c94291b3f3b7bdd0639b4b238c89445"
+    python3 -m pip download --no-deps --only-binary=:all: --dest .cache/flatpak-wheels \
+      --index-url https://pypi.org/simple setuptools==81.0.0 wheel==0.45.1
+    python3 -m venv .cache/antlr-build
+    .cache/antlr-build/bin/python -m pip install --no-index --find-links .cache/flatpak-wheels \
+      setuptools==81.0.0 wheel==0.45.1
+    .cache/antlr-build/bin/python -m pip wheel --no-deps --no-build-isolation --no-cache-dir \
+      --wheel-dir .cache/flatpak-wheels \
+      "https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
     python3 -m pip download --only-binary=:all: --index-url https://pypi.org/simple \
       --find-links .cache/flatpak-wheels --dest .cache/flatpak-wheels \
       --constraint .cache/release-constraints.txt --requirement packaging/requirements-local.txt wheel==0.45.1
 ' _ "$source_dir"
 
-# Verify each downloaded PyPI file against its exact-version upstream digest,
-# and retain its source URL + hash with the public release for reproduction.
+# Verify downloaded wheels against upstream digests. Record the ANTLR wheel
+# separately with its pinned source and build tools; it is built in this SDK.
 python3 - "$source_dir" "$output/$basename-wheels.json" <<'PY'
 import email, hashlib, json, pathlib, re, sys, urllib.request, zipfile
 root, target = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
@@ -143,8 +258,16 @@ for wheel in sorted((root / '.cache/flatpak-wheels').glob('*.whl')):
         raise SystemExit('Unpinned or unexpected dependency: ' + name + '==' + version)
     with wheel.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    if name == 'torch':
-        expected = '45025d7752dbc6b4c784c03afaee9c5f19730ce084b2e43fc9a2fe1677d9ff86'
+    if name == 'antlr4-python3-runtime':
+        records.append(dict(name=name, version=version, filename=wheel.name, sha256=digest,
+                            origin='sdk-source-build',
+                            source_url='https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz',
+                            source_sha256='f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b',
+                            build_tools={'setuptools': '81.0.0', 'wheel': '0.45.1'}))
+        continue
+    if name in {'torch', 'torchaudio'}:
+        expected = {'torch': '45025d7752dbc6b4c784c03afaee9c5f19730ce084b2e43fc9a2fe1677d9ff86',
+                    'torchaudio': '3c0175d0ed054bf0dc3b154a744b1a127c94291b3f3b7bdd0639b4b238c89445'}[name]
         url = 'https://download.pytorch.org/whl/cpu/' + wheel.name.replace('+', '%2B')
     else:
         request = urllib.request.Request(f'https://pypi.org/pypi/{name}/{version}/json',
@@ -176,6 +299,7 @@ flatpak build --runtime --readonly --unshare=network \
     "$work/build" python3 -c '
 import importlib.metadata as metadata, json, pathlib
 import torch, PySide6
+from nemo.collections.asr.models import ASRModel
 from qwen_asr import Qwen3ASRModel
 from transformers import MarianMTModel, MarianTokenizer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -184,7 +308,7 @@ from phimthai.settings import Settings
 from phimthai.feedback import DictationFeedback
 import phimthai.app
 settings = Settings()
-assert settings.model == "qwen-0.6b" and settings.profile == "smart"
+assert settings.model == "typhoon-realtime" and settings.profile == "smart"
 assert settings.model_setup == "pending" and not settings.desktop_setup_done
 assert settings.remember_desktop and settings.paste_mode == "immediate"
 from phimthai.devices import select_device
@@ -238,7 +362,7 @@ import hashlib, json, pathlib, sys
 output, prefix = pathlib.Path(sys.argv[1]), sys.argv[2]
 provenance = dict(commit=sys.argv[5], sdk_commit=sys.argv[3], runtime_commit=sys.argv[4],
                   architecture='x86_64', branch='beta', models_bundled=False,
-                  dependency_policy='Pinned upstream wheels; source-patched Qt Multimedia and Qwen; not a Flathub submission')
+                  dependency_policy='Pinned upstream wheels; source-built ANTLR; source-patched Qt Multimedia and Qwen; not a Flathub submission')
 (output / (prefix + '-build.json')).write_text(json.dumps(provenance, indent=2) + '\n')
 checksums = []
 for path in sorted(output.glob(prefix + '*')):

@@ -12,6 +12,7 @@ license = "MIT"
 dependencies = ["PySide6>=6.8,<6.12", "dbus-next==0.2.3", "huggingface-hub>=0.34,<1", "webrtcvad-wheels==2.0.14", "soundfile>=0.13,<1"]
 
 [project.optional-dependencies]
+typhoon = ["nemo-toolkit[asr]==3.0.0", "torchaudio==2.11.0"]
 qwen = ["qwen-asr==0.0.6", "transformers==4.57.6", "sentencepiece>=0.2", "protobuf"]
 intel = ["openvino-genai==2026.3.1.0"]
 

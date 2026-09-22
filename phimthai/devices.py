@@ -4,6 +4,7 @@ import os
 import platform
 from pathlib import Path
 from functools import lru_cache
+from .settings import DEFAULT_MODEL
 
 
 @lru_cache(maxsize=1)
@@ -28,7 +29,7 @@ def inventory():
             "flatpak": Path("/.flatpak-info").exists()}
 
 
-def select_device(requested, torch, model="qwen-0.6b", preference="speed"):
+def select_device(requested, torch, model=DEFAULT_MODEL, preference="speed"):
     if requested == "npu":
         raise RuntimeError("This model has no verified NPU backend. Choose Auto or CPU. Detected NPU hardware alone is not sufficient.")
     if requested == "auto":

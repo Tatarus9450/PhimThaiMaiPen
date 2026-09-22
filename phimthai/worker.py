@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .devices import select_device
 from .models import CATALOG, local_model
-from .settings import Settings, data_dir
+from .settings import DEFAULT_MODEL, Settings, data_dir
 
 
 def run(request):
@@ -29,6 +29,9 @@ def run_inference(request):
     import typhoon_service as service
     settings = Settings(**request["settings"]).validate()
     spec = CATALOG[settings.model]
+    if request["action"] == "transcribe" and spec.backend == "typhoon" and settings.language == "English":
+        raise RuntimeError("Typhoon รองรับเสียงภาษาไทยเท่านั้น หากต้องการถอดเสียง English "
+                           "ให้เลือก Qwen ในหน้าโมเดล และดาวน์โหลดก่อนหากยังไม่มี")
     path = local_model(settings.model, verify=True) if request["action"] != "translate" else None
     if request["action"] != "translate" and path is None:
         raise RuntimeError("Model missing or integrity check failed. Download or repair it in Models.")
@@ -62,12 +65,17 @@ def run_inference(request):
                 result = fastflowlm_backend.transcribe(request["audio"], settings)
             except Exception as exc:
                 fastflowlm_backend.stop()
-                if local_model("qwen-0.6b") is None:
-                    raise RuntimeError(f"{exc}. Download Qwen 0.6B to enable CPU fallback.") from exc
-                fallback = replace(settings, model="qwen-0.6b", device="cpu")
+                fallback_model = ("qwen-0.6b" if settings.language == "English"
+                                  or local_model("qwen-0.6b") is not None else DEFAULT_MODEL)
+                fallback_name = CATALOG[fallback_model].name
+                if local_model(fallback_model) is None:
+                    raise RuntimeError(f"{exc}. Download {fallback_name} to enable CPU fallback.") from exc
+                fallback = replace(settings, model=fallback_model, device="cpu")
                 from dataclasses import asdict
                 result = run_inference(dict(request, settings=asdict(fallback)))
-                result["warning"] = f"AMD NPU unavailable ({exc}); completed with Qwen 0.6B on CPU"
+                result["warning"] = f"AMD NPU unavailable ({exc}); completed with {fallback_name} on CPU"
+                if fallback_model == DEFAULT_MODEL:
+                    result["warning"] += "; Typhoon recognizes Thai speech only"
                 return result
         result["source_text"] = service.postprocess_text(result["text"], settings.profile)
         result["text"] = result["source_text"]

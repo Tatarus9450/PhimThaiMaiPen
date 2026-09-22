@@ -12,8 +12,8 @@
   </developer>
   <description>
     <p>Turn Thai and English speech into editable text on your Linux desktop. Record with your microphone or open an audio file, then paste automatically after granting desktop permission, or review and copy the result.</p>
-    <p>On the first launch of a new installation, the app downloads Qwen3-ASR 0.6B separately, approximately 1.89 GB. Pause and resume the download in the app. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
-    <p>New installations use Qwen3-ASR 0.6B with Smart Mix, automatic CPU selection and immediate paste. The app prepares recording and mode shortcuts and requests desktop consent for keyboard access. Existing user settings are preserved.</p>
+    <p>On the first launch of a new installation, the app downloads Typhoon ASR Realtime separately, approximately 462 MB. Pause and resume the download in the app. Qwen models are optional downloads for English and mixed-language speech. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
+    <p>New installations use Typhoon ASR Realtime with Smart Mix, automatic CPU selection and immediate paste. The app prepares recording and mode shortcuts and requests desktop consent for keyboard access. Existing user settings are preserved.</p>
     <p>A penguin holding a microphone identifies the app, with a cobalt, amber and ivory glass interface. The icon contains no text.</p>
     <ul>
       <li>Edit, copy, retry, and translate Thai text into English</li>
