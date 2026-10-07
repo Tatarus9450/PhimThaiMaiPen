@@ -36,7 +36,10 @@ manifest = {
     "branch": "beta",
     "command": "phimthai", "finish-args": ["--socket=wayland", "--socket=x11", "--share=ipc",
         "--socket=pulseaudio", "--share=network", "--device=dri", "--env=QT_AUDIO_BACKEND=pulseaudio",
-        "--env=QT_PLUGIN_PATH=/app/lib/plugins:/usr/lib/plugins"],
+        # Keep Qt plugins from the same source-built PySide stack as QtCore.
+        # Mixing the Platform's /usr/lib/plugins with bundled Qt causes
+        # private-API symbol failures before QApplication can start.
+        "--env=QT_PLUGIN_PATH=/app/lib/python3.13/site-packages/PySide6/Qt/plugins:/app/lib/plugins"],
     "build-options": {"env": {"PYTHONPATH": "/app/lib/python3.13/site-packages"}},
     "modules": [{"name": "krb5", "subdir": "src", "config-opts": ["--disable-static", "--disable-rpath", "--without-keyutils", "--without-libedit"],
         "sources": [{"type": "archive", "url": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.2.tar.gz",

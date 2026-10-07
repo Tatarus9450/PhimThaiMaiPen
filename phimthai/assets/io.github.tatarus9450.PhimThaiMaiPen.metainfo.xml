@@ -28,6 +28,11 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0~beta5" date="2026-10-07" type="development">
+      <description>
+        <p>Fixes startup crashes in Flatpak caused by mixed Qt platform plugins and stale singleton locks after a crash.</p>
+      </description>
+    </release>
     <release version="2.0.0~beta4" date="2026-10-07" type="development">
       <description><p>Improved recording, ASR job and paste lifecycle reliability, localized status feedback, display-aware window sizing, and regression coverage for popup and clipboard races.</p></description>
     </release>

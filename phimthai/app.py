@@ -1433,7 +1433,11 @@ def single_instance(app):
             socket.waitForBytesWritten(1000)
             socket.disconnectFromServer()
             return None
-        raise RuntimeError("PhimThaiMaiPen is already running but did not respond")
+        # A crashed Flatpak process can leave QLockFile containing a PID from
+        # the sandbox namespace (often PID 2). With no live QLocalServer,
+        # treat that lock as stale and retry once before reporting an error.
+        if not app.instance_lock.removeStaleLockFile() or not app.instance_lock.tryLock(0):
+            raise RuntimeError("PhimThaiMaiPen is already running but did not respond")
     QLocalServer.removeServer(name)
     server = QLocalServer(app)
     server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)

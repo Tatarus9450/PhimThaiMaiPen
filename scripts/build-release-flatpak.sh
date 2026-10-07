@@ -343,7 +343,7 @@ PY
 flatpak build --runtime --readonly --unshare=network --filesystem="$work:ro" \
     --nosocket=wayland --nosocket=x11 --nosocket=pulseaudio \
     --env=PYTHONPATH=/app/lib/python3.13/site-packages --env=QT_QPA_PLATFORM=offscreen \
-    --env=QT_AUDIO_BACKEND=pulseaudio --env=QT_PLUGIN_PATH=/app/lib/plugins:/usr/lib/plugins \
+    --env=QT_AUDIO_BACKEND=pulseaudio --env=QT_PLUGIN_PATH=/app/lib/python3.13/site-packages/PySide6/Qt/plugins:/app/lib/plugins \
     "$work/build" python3 "$source_dir/scripts/verify-flatpak-preview.py" \
     --model-dir "$work/test-data/phimthai/models/qwen-0.6b" --samples-dir "$work/samples" \
     --threads 2 > "$output/$basename-asr.json" || { cat "$output/$basename-asr.json"; exit 1; }
