@@ -28,6 +28,9 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0~beta4" date="2026-10-07" type="development">
+      <description><p>Improved recording, ASR job and paste lifecycle reliability, localized status feedback, display-aware window sizing, and regression coverage for popup and clipboard races.</p></description>
+    </release>
     <release version="2.0.0~beta3" date="2026-09-12" type="development">
       <description><p>A new text-free penguin microphone icon and a cobalt, amber and ivory glass interface. Automatic first-launch Qwen download, shortcut and paste consent setup, CPU defaults and GPU/NPU Beta warnings remain available. Existing settings are preserved.</p></description>
     </release>
