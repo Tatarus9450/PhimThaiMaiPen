@@ -91,6 +91,13 @@ class RetryAndSilenceTests(IsolatedWindow, unittest.TestCase):
 
 
 class ModeSwitchTests(IsolatedWindow, unittest.TestCase):
+    def test_initial_window_size_fits_available_screen_with_safe_margin(self):
+        from phimthai.app import _initial_window_size
+        screen = Mock()
+        screen.availableGeometry.return_value = Mock(width=lambda: 1060, height=lambda: 724)
+        with patch("phimthai.app.QGuiApplication.primaryScreen", return_value=screen):
+            self.assertEqual(_initial_window_size(), (1028, 692))
+
     def test_default_smart_mix_cycles_all_modes_and_persists(self):
         from phimthai.settings import load_settings
         self.assertEqual(self.window.profile.currentData(), "smart")

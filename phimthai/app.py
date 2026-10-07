@@ -31,6 +31,17 @@ PROFILE_NAMES = {"smart": "Smart Mix", "raw": "Raw", "th_to_eng": "TH → ENG"}
 BETA_WARNING = "GPU / NPU · Beta\nฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน\nแนะนำให้ใช้ CPU สำหรับการถอดเสียงทั่วไป"
 
 
+def _initial_window_size():
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return 1060, 760
+    available = screen.availableGeometry()
+    return (
+        min(1060, max(820, available.width() - 32)),
+        min(760, max(600, available.height() - 32)),
+    )
+
+
 def button(text, callback, primary=False):
     widget = QPushButton(text)
     widget.clicked.connect(callback)
@@ -53,7 +64,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PhimThaiMaiPen · พิมพ์ไทยไม่เป็น")
         self.app_icon = QIcon(str(Path(__file__).parent / "assets" / (APP_ID + ".png")))
         self.setWindowIcon(self.app_icon)
-        self.resize(1060, 760)
+        self.resize(*_initial_window_size())
         self.setMinimumSize(820, 600)
         self.temp = tempfile.TemporaryDirectory(prefix="phimthai-", dir=os.environ.get("XDG_RUNTIME_DIR"))
         self.recording = False
@@ -668,7 +679,7 @@ class MainWindow(QMainWindow):
             self.portal_command("shortcuts", trigger=self.hotkey.text(), persist=self.remember_desktop.isChecked())
 
     def error(self, message):
-        self.set_status("Error: " + message)
+        self.set_status("ข้อผิดพลาด: " + message)
         self.nav.setCurrentRow(0)
         self.feedback.error(message)
 
@@ -857,6 +868,8 @@ class MainWindow(QMainWindow):
     def clipboard_restored(self):
         self.paste_busy = False
         self.paste_committed = False
+        if not self.recording and not self.jobs.busy and self.status.text().startswith("ส่งคำสั่งวางแล้ว"):
+            self.set_status("วางข้อความแล้ว · คืน clipboard เรียบร้อย")
         if self.quitting:
             QTimer.singleShot(0, self.quit)
 
@@ -913,22 +926,41 @@ class MainWindow(QMainWindow):
         self.paste_timer.start(delay)
 
     def send_paste(self):
-        if self.portal_permission_pending:
-            self.clipboard.restore()
-            self.set_status("Paste cancelled while desktop permissions are being configured")
-        elif self.clipboard.owns_clipboard():
-            self.portal_command("paste")
-        else:
-            self.clipboard.restore()
-            self.set_status("Paste cancelled because the clipboard changed")
+        self.paste_timer.stop()
+        self.portal_command("paste")
+
+    def report_paste_failure(self, message):
+        # A delayed paste failure must not hide a newer recording or ASR job.
+        if self.recording or self.jobs.busy:
+            return
+        self.set_status(message)
+        self.feedback.error(message)
+
+    def abort_pending_paste(self, message):
+        if self.paste_committed or self.paste_inflight:
+            return
+        self.paste_timer.stop()
+        self.paste_request_id = None
+        self.paste_busy = False
+        self.clipboard.restore()
+        self.report_paste_failure(message)
 
     def portal_command(self, action, **options):
-        if action == "paste" and self.paste_inflight:
-            return
-        if action == "paste" and (self.portal_permission_pending or not self.paste_busy
-                                  or not self.paste_enabled or not self.clipboard.owns_clipboard()):
-            self.clipboard.restore()
-            return
+        if action == "paste":
+            if self.paste_inflight or self.paste_committed or not self.paste_request_id:
+                return
+            reason = None
+            if self.portal_permission_pending:
+                reason = "Paste cancelled while desktop permissions are being configured"
+            elif not self.paste_enabled:
+                reason = "Paste cancelled because desktop paste permission ended; the text remains in the editor"
+            elif not self.paste_busy:
+                reason = "Paste cancelled; the text remains in the editor"
+            elif not self.clipboard.owns_clipboard():
+                reason = "Paste cancelled because the clipboard changed"
+            if reason:
+                self.abort_pending_paste(reason)
+                return
         if action in {"shortcuts", "enable_paste", "restore"}:
             if self.portal_permission_pending:
                 self.error("Finish the current desktop permission request first")
@@ -936,9 +968,12 @@ class MainWindow(QMainWindow):
             if self.paste_busy and not self.paste_timer.isActive():
                 self.error("Wait for the current paste to finish before configuring permissions")
                 return
-            self.paste_timer.stop()
-            self.clipboard.restore()
-            self.paste_busy = False
+            if self.paste_timer.isActive():
+                self.abort_pending_paste("Paste cancelled while desktop permissions are being configured")
+            else:
+                self.clipboard.restore()
+                self.paste_busy = False
+                self.paste_request_id = None
             self.portal_permission_pending = True
             self.update_setup_view()
         if action == "paste":
@@ -975,7 +1010,12 @@ class MainWindow(QMainWindow):
                 self.show_shortcut_status()
             elif event == "paste_enabled":
                 self.paste_enabled = True
-                self.set_status("Paste permission enabled" + ("; desktop supports restoring it on launch" if response.get("persistent") else " for this session"))
+                message = "อนุญาตวางข้อความแล้ว"
+                if response.get("persistent"):
+                    message += " · ระบบจะจำสิทธิ์นี้ไว้เมื่อเปิดแอปครั้งถัดไป"
+                else:
+                    message += " สำหรับเซสชันนี้"
+                self.set_status(message)
             elif event == "paste_sent":
                 request_id = response.get("request_id")
                 if not request_id or request_id != self.paste_inflight:
@@ -986,7 +1026,7 @@ class MainWindow(QMainWindow):
                     continue
                 self.clipboard.restore_later()
                 self.feedback.typing()
-                self.set_status("Paste keys sent. Check the target app; clipboard will be restored.")
+                self.set_status("ส่งคำสั่งวางแล้ว ตรวจสอบแอปปลายทางได้เลย · ระบบจะคืน clipboard ให้ภายหลัง")
             elif event == "shortcuts_enabled":
                 self.portal_shortcut = response.get("trigger", "Configured by desktop")
                 self.refresh_shortcut_status()
@@ -1011,9 +1051,10 @@ class MainWindow(QMainWindow):
                         self.clipboard.restore_later()
                         continue
                     self.clipboard.restore_later()
+                    self.report_paste_failure(response["error"])
                 else:
                     self.clipboard.restore()
-                self.error(response["error"])
+                    self.error(response["error"])
             elif event == "warning":
                 self.set_status(response["error"])
             elif event == "command_finished":
@@ -1022,6 +1063,9 @@ class MainWindow(QMainWindow):
             self.update_setup_view()
 
     def portal_finished(self):
+        paste_interrupted = bool(self.paste_request_id and (self.paste_inflight or self.paste_timer.isActive()))
+        self.paste_timer.stop()
+        self.paste_request_id = None
         self.desktop_queue.clear()
         if self.startup_action:
             self.startup_action = ""
@@ -1038,6 +1082,9 @@ class MainWindow(QMainWindow):
             self.clipboard.restore_later()
         else:
             self.clipboard.restore()
+            self.paste_busy = False
+        if paste_interrupted and not self.quitting:
+            self.report_paste_failure("Paste cancelled because the desktop connection closed; the text remains in the editor")
 
     def portal_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:

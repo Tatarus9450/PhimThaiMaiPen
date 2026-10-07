@@ -208,7 +208,7 @@ class DictationFeedback(QObject):
         self._ready = False
 
 
-def _overlay():
+def _overlay(*, _allow_headless=False):
     """Own helper only: no singleton IPC, microphone, clipboard, or other windows."""
     from PySide6.QtCore import QRectF, QSocketNotifier
     from PySide6.QtGui import QColor, QPainter, QPen
@@ -216,7 +216,8 @@ def _overlay():
 
     app = QApplication([sys.argv[0]])
     app.setQuitOnLastWindowClosed(False)
-    if app.platformName() != "xcb":
+    if app.platformName() != "xcb" and not (
+            _allow_headless and app.platformName() in {"offscreen", "minimal"}):
         raise RuntimeError("The small left-side HUD requires XWayland/XCB")
 
     class Overlay(QWidget):
@@ -245,7 +246,7 @@ def _overlay():
             self.badge.setStyleSheet("color: #bbc4cb; background: transparent; font: 10px sans-serif;")
             self.timer = QTimer(self)
             self.timer.setSingleShot(True)
-            self.timer.timeout.connect(self.hide)
+            self.timer.timeout.connect(self.dismiss)
 
         def paintEvent(self, event):
             painter = QPainter(self)
@@ -262,15 +263,29 @@ def _overlay():
             painter.setBrush(self.color)
             painter.drawEllipse(QRectF(19, 21, 10, 10))
 
+        def report(self, state):
+            handle = self.windowHandle()
+            print(json.dumps({"event": "state", "state": state, "visible": self.isVisible(),
+                              "profile": self.badge.text(),
+                              "x": self.x(), "y": self.y(), "width": self.width(), "height": self.height(),
+                              "focused": self.isVisible() and handle is not None and app.focusWindow() is handle,
+                              "native_id": int(self.winId()) if handle is not None else 0}), flush=True)
+
+        def dismiss(self, state="idle"):
+            self.timer.stop()
+            self.hide()
+            self.report(state)
+
         def update_state(self, message):
             state = message.get("state", "idle")
             self.timer.stop()
+            self.badge.setText(str(message.get("profile", "MIX")))
             if state == "shutdown":
-                self.hide()
+                self.dismiss("shutdown")
                 app.quit()
                 return
             if state == "idle":
-                self.hide()
+                self.dismiss()
                 return
             title, color, duration = {
                 "listening": ("Listening", "#ff3b30", 0),
@@ -283,7 +298,6 @@ def _overlay():
             self.color = QColor(color)
             self.title.setText(title)
             self.title.setStyleSheet(f"color: {'#ffffff' if state == 'listening' else color}; background: transparent; font: 13px sans-serif;")
-            self.badge.setText(str(message.get("profile", "MIX")))
             self.setAccessibleName(title + " · " + self.badge.text())
             geometry = app.primaryScreen().geometry()
             self.move(geometry.x() + 32, geometry.y() + (geometry.height() - 52) // 2)
@@ -291,11 +305,7 @@ def _overlay():
             self.update()
             if duration:
                 self.timer.start(duration)
-            print(json.dumps({"event": "state", "state": state, "visible": self.isVisible(),
-                              "profile": self.badge.text(),
-                              "x": self.x(), "y": self.y(), "width": self.width(), "height": self.height(),
-                              "focused": app.focusWindow() is self.windowHandle(),
-                              "native_id": int(self.winId())}), flush=True)
+            self.report(state)
 
     window = Overlay()
     buffer = bytearray()
@@ -305,6 +315,7 @@ def _overlay():
         data = os.read(0, 4096)
         if not data:
             notifier.setEnabled(False)
+            window.dismiss("shutdown")
             app.quit()
             return
         buffer.extend(data)

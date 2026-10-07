@@ -37,16 +37,23 @@ class InertClipboard(QObject):
         self.owned = False
         self.offers = []
         self.restore_requests = 0
+        self.contents = "Original clipboard"
+        self.previous = None
 
     def offer(self, text):
         self.offers.append(text)
+        self.previous = self.contents
+        self.contents = text
         self.owned = True
 
     def owns_clipboard(self):
         return self.owned
 
     def restore(self):
-        if self.owned:
+        if self.previous is not None:
+            if self.owned:
+                self.contents = self.previous
+            self.previous = None
             self.owned = False
             self.restored.emit()
 
@@ -244,6 +251,137 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         window.clipboard.restore()
         self.assertFalse(window.paste_committed)
         self.assertFalse(window.paste_busy)
+
+    def test_paste_failure_does_not_overwrite_active_job_status(self):
+        window = self.window
+        window.jobs.busy = True
+        window.feedback.processing()
+        window.set_status("กำลังประมวลผลเสียง…")
+        window.report_paste_failure("Synthetic late paste failure")
+        self.assertEqual(window.status.text(), "กำลังประมวลผลเสียง…")
+        self.assertEqual(window.feedback._phase, "processing")
+        window.jobs.busy = False
+
+    def test_matching_paste_error_cannot_end_newer_recording(self):
+        window = self.window
+        window.editor.setPlainText("Synthetic payload")
+        window.paste()
+        request_id = window.paste_request_id
+        window.paste_timer.stop()
+        window.send_paste()
+        with patch("phimthai.app.local_model", return_value=self.root / "synthetic-model"):
+            window.toggle_record()
+        self.assertTrue(window.recording)
+        self.assertEqual(window.feedback._phase, "listening")
+
+        self.responses = (json.dumps({"event": "error", "action": "paste",
+                                      "request_id": request_id, "error": "Synthetic failure"}) + "\n").encode()
+        window.portal_output()
+
+        self.assertTrue(window.recording)
+        self.assertEqual(window.feedback._phase, "listening")
+        window.cancel()
+
+    def prepare_pending_paste(self):
+        self.window.editor.setPlainText("ข้อความที่ต้องเก็บไว้ English")
+        self.window.feedback.processing()
+        self.window.paste()
+        self.assertTrue(self.window.paste_timer.isActive())
+
+    def assert_pending_paste_ended(self):
+        self.assertFalse(self.window.paste_timer.isActive())
+        self.assertFalse(self.window.paste_busy)
+        self.assertFalse(self.window.paste_committed)
+        self.assertIsNone(self.window.paste_inflight)
+        self.assertIsNone(self.window.paste_request_id)
+        self.assertEqual(self.window.editor.toPlainText(), "ข้อความที่ต้องเก็บไว้ English")
+        self.assertEqual(self.window.feedback._phase, "error")
+        self.window.jobs.cancel.assert_not_called()
+        with patch("phimthai.app.local_model", return_value=self.root / "synthetic-model"):
+            self.window.toggle_record()
+        self.assertTrue(self.window.recording)
+        self.assertEqual(self.window.feedback._phase, "listening")
+
+    def test_changed_clipboard_aborts_countdown_without_losing_text_or_new_copy(self):
+        self.prepare_pending_paste()
+        self.window.clipboard.contents = "A newer external copy"
+        self.window.clipboard.owned = False
+        self.window.send_paste()
+        self.assertEqual(self.commands, [])
+        self.assertEqual(self.window.clipboard.contents, "A newer external copy")
+        self.assertIn("clipboard changed", self.window.status.text())
+        self.assert_pending_paste_ended()
+
+    def test_permission_lost_at_dispatch_ends_feedback_and_allows_recording(self):
+        self.prepare_pending_paste()
+        self.window.paste_enabled = False
+        self.window.portal_command("paste")
+        self.assertEqual(self.commands, [])
+        self.assertEqual(self.window.clipboard.contents, "Original clipboard")
+        self.assertIn("permission ended", self.window.status.text())
+        self.assert_pending_paste_ended()
+
+    def test_permission_pending_at_dispatch_ends_feedback_and_allows_recording(self):
+        self.prepare_pending_paste()
+        self.window.portal_permission_pending = True
+        self.window.send_paste()
+        self.assertEqual(self.commands, [])
+        self.assertIn("permissions are being configured", self.window.status.text())
+        self.assert_pending_paste_ended()
+
+    def test_starting_permission_request_cancels_countdown_feedback(self):
+        self.prepare_pending_paste()
+        self.window.portal_command("shortcuts", trigger="Meta+H")
+        self.assertEqual([command["action"] for command in self.commands], ["shortcuts"])
+        self.assertTrue(self.window.portal_permission_pending)
+        self.assert_pending_paste_ended()
+
+    def test_bridge_exit_ends_waiting_feedback_but_preserves_committed_offer(self):
+        self.prepare_pending_paste()
+        self.window.send_paste()
+        self.window.portal_finished()
+        self.assertEqual(self.window.feedback._phase, "error")
+        self.assertIsNone(self.window.paste_request_id)
+        self.assertIsNone(self.window.paste_inflight)
+        self.assertTrue(self.window.paste_committed)
+        self.assertTrue(self.window.paste_busy)
+        self.assertTrue(self.window.clipboard.owns_clipboard())
+        self.assertEqual(self.window.clipboard.contents, "ข้อความที่ต้องเก็บไว้ English")
+        self.assertEqual(self.window.editor.toPlainText(), "ข้อความที่ต้องเก็บไว้ English")
+        self.assertEqual(self.window.clipboard.restore_requests, 1)
+        self.window.clipboard.restore()
+        self.assert_pending_paste_ended()
+
+    def test_bridge_exit_after_cancel_cannot_revive_feedback(self):
+        self.prepare_pending_paste()
+        self.window.send_paste()
+        self.window.cancel()
+        self.window.portal_finished()
+        self.assertEqual(self.window.feedback._phase, "idle")
+        self.assertTrue(self.window.paste_committed)
+        self.assertTrue(self.window.clipboard.owns_clipboard())
+        self.assertEqual(self.window.clipboard.restore_requests, 1)
+
+    def test_paste_failure_cannot_end_a_newer_recording(self):
+        for dispatched in (False, True):
+            with self.subTest(dispatched=dispatched):
+                self.prepare_pending_paste()
+                if dispatched:
+                    self.window.send_paste()
+                with patch("phimthai.app.local_model", return_value=self.root / "synthetic-model"):
+                    self.window.toggle_record()
+                if dispatched:
+                    self.window.portal_finished()
+                else:
+                    self.window.clipboard.owned = False
+                    self.window.clipboard.contents = "New external clipboard"
+                    self.window.send_paste()
+                self.assertTrue(self.window.recording)
+                self.assertEqual(self.window.feedback._phase, "listening")
+                self.window.jobs.cancel.assert_not_called()
+                self.window.clipboard.restore()
+                self.window.cancel()
+                self.window.jobs.cancel.reset_mock()
 
 
 if __name__ == "__main__":

@@ -84,7 +84,7 @@ class JobController(QObject):
             process.start(sys.executable, ["-m", self.worker_module])
         else:
             self.dispatch()
-        self.changed.emit("Processing speech…")
+        self.changed.emit("กำลังประมวลผลเสียง…")
         self.timer.start(600_000)
 
     def dispatch(self):
