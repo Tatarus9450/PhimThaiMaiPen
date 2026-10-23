@@ -11,9 +11,6 @@
     "/share/fish",
     "/share/man"
   ],
-  "post-install": [
-    "install -Dm644 COPYING /app/share/licenses/wl-clipboard/COPYING"
-  ],
   "sources": [
     {
       "type": "archive",

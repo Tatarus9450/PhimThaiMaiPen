@@ -26,7 +26,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libegl1 libopengl0 libgl1 libxkbcommon0 libxcb-cursor0 libpulse0 desktop-file-utils appstream python3-gi ffmpeg patch pulseaudio-utils
       - name: Install application test dependencies
-        run: python scripts/install-app.py --python "$(command -v python)" --no-launcher
+        run: |
+          python scripts/install-app.py --python "$(command -v python)" --no-launcher
+          # Some tests use pytest fixtures; unittest discovery imports them too.
+          .venv-app/bin/python -m pip install "pytest>=8,<10"
       - name: Check application and legacy regressions
         run: |
           .venv-app/bin/python -m unittest discover -s tests -v
@@ -36,5 +39,4 @@ jobs:
           appstreamcli validate --no-net phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.metainfo.xml
       - name: Run pytest collection (tests/ and test_asr_backend.py)
         run: |
-          .venv-app/bin/python -m pip install "pytest>=8,<10"
           .venv-app/bin/python -m pytest -q -rs tests test_asr_backend.py
