@@ -1,6 +1,6 @@
 # Flatpak beta distribution
 
-Updated 2026-10-24 for `2.0.0b7` (tag `v2.0.0-beta.7`). Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, x86_64, KDE Platform/SDK 6.11. Betas are published as GitHub pre-releases after the CI build, offline ASR smoke and bundle import checks pass. The app is **not on Flathub yet**; Discover can install a downloaded bundle but cannot find it by search.
+Updated 2026-10-24 for `2.0.0b8` (tag `v2.0.0-beta.8`). Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, x86_64, KDE Platform/SDK 6.11. Betas are published as GitHub pre-releases after the CI build, offline ASR smoke and bundle import checks pass. The app is **not on Flathub yet**; Discover can install a downloaded bundle but cannot find it by search.
 
 New installations default to Typhoon ASR Realtime (~462 MB, downloaded on first run); Qwen3-ASR models are optional downloads. The bundle includes wl-clipboard (`wl-copy`/`wl-paste` in `/app/bin`) for the Wayland paste fallback. Historical beta 3 publication evidence: [github-beta3-release.json](evidence/github-beta3-release.json).
 

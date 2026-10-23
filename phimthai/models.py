@@ -1,4 +1,5 @@
 """Pinned model catalog and verified, resumable Hugging Face downloads."""
+import contextlib
 import hashlib
 import json
 import os
@@ -127,7 +128,10 @@ def save_signature(directory, signature):
         pending.write_text(json.dumps({"version": 1, "files": signature}))
         pending.replace(directory / STAT_FILE)
     except OSError:
-        pending.unlink(missing_ok=True)
+        # The cache is optional; on a read-only model directory unlink raises
+        # EROFS (not FileNotFoundError), which must not fail verification.
+        with contextlib.suppress(OSError):
+            pending.unlink(missing_ok=True)
 
 
 def model_dir(model_id):

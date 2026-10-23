@@ -1,4 +1,5 @@
 """Model verification is persisted across processes and invalidated by any stat change."""
+import errno
 import hashlib
 import json
 import os
@@ -68,6 +69,14 @@ class PersistedVerificationTests(unittest.TestCase):
         with patch.object(models, "digest", wraps=models.digest) as digest:
             self.assertEqual(local_model(self.model_id, verify=True), self.directory)
             self.assertEqual(digest.call_count, 3)
+
+    def test_read_only_directory_still_verifies(self):
+        # Release CI mounts the model read-only; there unlink raises EROFS too.
+        read_only = OSError(errno.EROFS, "Read-only file system")
+        with patch.object(Path, "write_text", side_effect=read_only), \
+                patch.object(Path, "unlink", side_effect=read_only):
+            self.assertEqual(local_model(self.model_id, verify=True), self.directory)
+        self.assertFalse((self.directory / STAT_FILE).exists())
 
 
 if __name__ == "__main__":
