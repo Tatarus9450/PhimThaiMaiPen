@@ -1,16 +1,19 @@
 """Native desktop application; model work never runs on the UI thread."""
 import json
+import logging
+import math
 import os
 import shutil
 import sys
 import tempfile
 import time
 import uuid
+from collections import deque
 from dataclasses import asdict, replace
 from pathlib import Path
 
 from PySide6.QtCore import QLockFile, QProcess, QTimer, Qt
-from PySide6.QtGui import QAction, QBrush, QColor, QGuiApplication, QIcon
+from PySide6.QtGui import QAction, QBrush, QColor, QGuiApplication, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
@@ -18,7 +21,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
     QProgressBar, QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget, QMenu, QSystemTrayIcon, QScrollArea)
 
 from . import APP_ID, __version__
+from . import strings as S
 from .audio import Recorder
+from .app_pages import PagesMixin
 from .appearance import GlassCanvas, GlassPanel, apply_style
 from .clipboard import ClipboardTransaction
 from .devices import inventory, openvino_devices
@@ -26,9 +31,31 @@ from .feedback import DictationFeedback
 from .jobs import JobController
 from .models import CATALOG, installed_size, local_model, model_dir, refresh_catalog, remove
 from .settings import DEFAULT_MODEL, Settings, data_dir, load_settings, save_settings
+from .state import Debouncer, DictationState, derive_state
 
-PROFILE_NAMES = {"smart": "Smart Mix", "raw": "Raw", "th_to_eng": "TH → ENG"}
-BETA_WARNING = "GPU / NPU · Beta\nฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน\nแนะนำให้ใช้ CPU สำหรับการถอดเสียงทั่วไป"
+try:  # Settings repair report (newer settings module); optional.
+    from .settings import load_settings_with_report
+except ImportError:  # pragma: no cover - older settings module
+    load_settings_with_report = None
+
+LOG = logging.getLogger("phimthai.app")
+PROFILE_NAMES = S.PROFILE_NAMES
+BETA_WARNING = S.BETA_WARNING
+TOGGLE_DEBOUNCE_SECONDS = 0.4
+MANUAL_PASTE_DELAY_MS = 3000
+AUTOMATIC_PASTE_DELAY_MS = 250
+STATE_COLORS = {DictationState.RECORDING: "#d93644", DictationState.PROCESSING: "#e0a020",
+                DictationState.PASTING: "#2f7de1"}
+
+
+def _available_memory_gb():
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1024 / 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
 
 
 def _initial_window_size():
@@ -51,25 +78,25 @@ def button(text, callback, primary=False):
     return widget
 
 
-class MainWindow(QMainWindow):
+class MainWindow(PagesMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         refresh_catalog()
         self.settings_error = ""
-        try:
-            self.settings = load_settings()
-        except Exception as exc:
-            self.settings = Settings()
-            self.settings_error = f"Settings could not load: {exc}. Existing file has not been overwritten."
-        self.setWindowTitle("PhimThaiMaiPen · พิมพ์ไทยไม่เป็น")
+        self.settings_warnings = []
+        self.load_initial_settings()
+        self.setWindowTitle(S.APP_TITLE)
         self.app_icon = QIcon(str(Path(__file__).parent / "assets" / (APP_ID + ".png")))
         self.setWindowIcon(self.app_icon)
         self.resize(*_initial_window_size())
         self.setMinimumSize(820, 600)
         self.temp = tempfile.TemporaryDirectory(prefix="phimthai-", dir=os.environ.get("XDG_RUNTIME_DIR"))
-        self.recording = False
+        self._state = DictationState.IDLE
+        self._recording = False
+        self.toggle_debounce = Debouncer(TOGGLE_DEBOUNCE_SECONDS)
         self.test_microphone = False
         self.audio_path = None
+        self.record_settings = self.settings
         self.download_process = None
         self.downloading_model = None
         self.download_buffer = b""
@@ -80,6 +107,7 @@ class MainWindow(QMainWindow):
         self.model_process_pid = 0
         self.startup_started = False
         self.startup_action = ""
+        self.startup_prewarmed = False
         self.desktop_queue = []
         self.desktop_starting = False
         self.desktop_setup_active = False
@@ -95,14 +123,18 @@ class MainWindow(QMainWindow):
         self.last_request = None
         self.quitting = False
         self.tray = None
+        self.tray_icons = {}
         headless = QGuiApplication.platformName() in {"offscreen", "minimal"}
         self.feedback = DictationFeedback(self, sound_enabled=self.settings.sound_feedback and not headless,
                                          popup_enabled=self.settings.popup_enabled and not headless)
         self.feedback.set_profile(self.settings.profile)
         self.jobs = JobController(self, temp_root=self.temp.name)
-        self.jobs.changed.connect(self.set_status)
+        self.jobs.changed.connect(self.job_status_changed)
         self.jobs.result.connect(self.completed)
         self.jobs.failed.connect(self.job_failed)
+        warm_changed = getattr(self.jobs, "warm_changed", None)
+        if warm_changed is not None and hasattr(warm_changed, "connect"):
+            warm_changed.connect(self.warm_changed)
         self.recorder = Recorder(self)
         self.recorder.failed.connect(self.capture_error)
         self.clipboard = ClipboardTransaction(self)
@@ -110,28 +142,185 @@ class MainWindow(QMainWindow):
         self.paste_request_id = None
         self.paste_inflight = None
         self.paste_committed = False
+        self.paste_queue = deque()
         self.clipboard.restored.connect(self.clipboard_restored)
         self.paste_timer = QTimer(self)
         self.paste_timer.setSingleShot(True)
         self.paste_timer.timeout.connect(self.send_paste)
+        self.paste_countdown = QTimer(self)
+        self.paste_countdown.setInterval(250)
+        self.paste_countdown.timeout.connect(self.paste_countdown_tick)
+        self.paste_deadline = 0.0
         self.build_ui()
         self.feedback.unavailable.connect(self.set_status)
-        self.recorder.media_devices.audioInputsChanged.connect(self.refresh_microphones)
+        self.recorder.media_devices.audioInputsChanged.connect(self.refresh_microphones_page)
         self.recorder.level.connect(self.level.setValue)
+        if callable(getattr(self.feedback, "level", None)):
+            self.recorder.level.connect(self.feedback.level)
         self.record_timer = QTimer(self)
         self.record_timer.timeout.connect(self.record_tick)
-        self.statusBar().showMessage(f"PhimThaiMaiPen {__version__}  ·  ประมวลผลในเครื่อง")
+        self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        self.escape_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        self.escape_shortcut.activated.connect(self.escape_pressed)
+        self.statusBar().showMessage(S.STATUS_BAR.format(version=__version__))
         self.refresh_models()
         self.refresh_device_choices()
         self.setup_tray()
         apply_style(QApplication.instance(), reduced_transparency=self.settings.reduced_transparency)
         self.refresh_shortcut_status()
+        self.update_unsaved_indicator()
         if self.settings_error:
             self.set_status(self.settings_error)
+        elif self.settings_warnings:
+            self.set_status(S.SETTINGS_REPAIRED.format(warnings=" · ".join(self.settings_warnings)))
         elif local_model(self.settings.model) is None:
-            self.set_status("เลือกและดาวน์โหลดโมเดลก่อนเริ่มพูด")
+            self.set_status(S.STATUS_NEED_MODEL)
         else:
-            self.set_status("พร้อมแล้ว กดเริ่มพูด เมื่อพูดจบให้กดอีกครั้ง")
+            self.set_status(S.STATUS_READY)
+
+    def load_initial_settings(self):
+        """Load settings; a repaired file is saved and reported, never a first-run blocker."""
+        try:
+            if load_settings_with_report is not None:
+                self.settings, warnings = load_settings_with_report()
+                self.settings_warnings = [str(item) for item in (warnings or []) if str(item).strip()]
+            else:
+                self.settings = load_settings()
+        except Exception as exc:
+            # Only an unreadable/unsupported file reaches here; keep it intact.
+            self.settings = Settings()
+            self.settings_error = S.SETTINGS_LOAD_FAILED.format(error=exc)
+            LOG.warning("settings could not load: %s", exc)
+            return
+        if self.settings_warnings:
+            LOG.warning("settings repaired: %s", "; ".join(self.settings_warnings))
+            try:
+                save_settings(self.settings)
+            except (OSError, ValueError) as exc:
+                self.settings_warnings.append(S.SETTINGS_REPAIR_SAVE_FAILED.format(error=exc))
+
+    # ----- dictation state -------------------------------------------------
+    @property
+    def recording(self):
+        return self._recording
+
+    @recording.setter
+    def recording(self, value):
+        self._recording = bool(value)
+        self.refresh_state()
+
+    def paste_pending(self):
+        timer = getattr(self, "paste_timer", None)
+        return bool(getattr(self, "paste_busy", False) or getattr(self, "paste_inflight", None)
+                    or (timer is not None and timer.isActive()))
+
+    def jobs_busy(self):
+        jobs = getattr(self, "jobs", None)
+        return bool(jobs is not None and jobs.busy is True)
+
+    @property
+    def state(self):
+        return derive_state(recording=self._recording, pasting=self.paste_pending(),
+                            processing=self.jobs_busy())
+
+    def refresh_state(self):
+        """The single transition point: log, then update tray tooltip/icon."""
+        new = self.state
+        if new is self._state:
+            return new
+        LOG.info("state %s -> %s", self._state.value, new.value)
+        self._state = new
+        self.update_tray_state()
+        control = getattr(self, "record_button", None)
+        if control is not None:
+            # Styled by appearance.py as QPushButton#recordControl[state=...].
+            control.setProperty("state", new.value)
+            control.style().unpolish(control)
+            control.style().polish(control)
+        return new
+
+    def update_tray_state(self):
+        if self.tray is None:
+            return
+        state = self._state
+        self.tray.setToolTip({DictationState.RECORDING: S.TRAY_RECORDING,
+                              DictationState.PROCESSING: S.TRAY_PROCESSING,
+                              DictationState.PASTING: S.TRAY_PASTING}.get(state, S.TRAY_IDLE))
+        self.tray.setIcon(self.state_icon(state))
+
+    def state_icon(self, state):
+        if state not in STATE_COLORS:
+            return self.app_icon
+        if state not in self.tray_icons:
+            pixmap = self.app_icon.pixmap(64, 64)
+            if pixmap.isNull():
+                pixmap = QPixmap(64, 64)
+                pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QColor("white"))
+            painter.setBrush(QColor(STATE_COLORS[state]))
+            painter.drawEllipse(38, 38, 24, 24)
+            painter.end()
+            self.tray_icons[state] = QIcon(pixmap)
+        return self.tray_icons[state]
+
+    def queued_jobs(self):
+        """Jobs ahead of a new submission (active + pending, without warmups)."""
+        jobs = self.jobs
+        try:
+            waiting = list(jobs.pending)
+        except (AttributeError, TypeError):
+            waiting = []
+        active = getattr(jobs, "active", None)
+        if isinstance(active, dict):
+            waiting.append(active)
+        return sum(1 for job in waiting if not (isinstance(job, dict) and job.get("action") == "warmup"))
+
+    def queue_full(self):
+        try:
+            return len(self.jobs.pending) >= 4
+        except (AttributeError, TypeError):
+            return False
+
+    def prewarm(self, settings):
+        prewarm = getattr(self.jobs, "prewarm", None)
+        if not callable(prewarm):
+            return False
+        try:
+            prewarm(settings)
+        except Exception as exc:  # Prewarming is an optimization only.
+            LOG.warning("prewarm failed: %s", exc)
+            return False
+        return True
+
+    def jobs_warm(self):
+        warm = getattr(self.jobs, "warm", True)
+        return warm is not False
+
+    def warm_changed(self, warm):
+        if warm:
+            model_ready = getattr(self.feedback, "model_ready", None)
+            if callable(model_ready):
+                model_ready()
+            if self.recording and self.status.text() == S.STATUS_PREPARING:
+                self.set_status(S.STATUS_LISTENING)
+
+    def startup_prewarm(self):
+        """Load the local model once desktop setup is done so the first Meta+H is fast."""
+        if self.startup_prewarmed or self.quitting or self.settings_error:
+            return
+        self.startup_prewarmed = True
+        if self.downloading_model == self.settings.model or local_model(self.settings.model) is None:
+            return
+        spec = CATALOG.get(self.settings.model)
+        available = _available_memory_gb()
+        needed = float(getattr(spec, "memory_gb", 0) or 0)
+        if available is not None and needed and available < needed * 1.5:
+            LOG.info("startup prewarm skipped: %.1f GB available, model needs about %.1f GB", available, needed)
+            return
+        if self.prewarm(self.settings):
+            LOG.info("startup prewarm requested for %s", self.settings.model)
 
     def start_first_run(self):
         """Called only by the interactive entry point, never by construction."""
@@ -159,7 +348,7 @@ class MainWindow(QMainWindow):
             self.settings = updated
             return True
         except (OSError, ValueError) as exc:
-            self.set_status(f"บันทึกการเริ่มต้นไม่สำเร็จ: {exc}")
+            self.set_status(S.SETUP_SAVE_FAILED.format(error=exc))
             return False
 
     def continue_desktop_setup(self):
@@ -204,6 +393,9 @@ class MainWindow(QMainWindow):
         if self.startup_action:
             action, self.startup_action = self.startup_action, ""
             self.toggle_record() if action == "toggle" else self.cycle_profile()
+        if self.startup_started:
+            # Desktop setup is finished; warm the model for the first hotkey.
+            self.startup_prewarm()
 
     def update_setup_view(self):
         if not hasattr(self, "setup_message"):
@@ -216,11 +408,11 @@ class MainWindow(QMainWindow):
             self.setup_progress.setRange(self.download_progress.minimum(), self.download_progress.maximum())
             self.setup_progress.setValue(self.download_progress.value())
         elif not ready:
-            self.setup_message.setText("ยังไม่มีโมเดลพร้อมใช้ · โหลดต่อ หรือเลือกนำเข้าโมเดลในหน้าโมเดล")
+            self.setup_message.setText(S.SETUP_NO_MODEL)
             self.setup_progress.setRange(0, 100)
             self.setup_progress.setValue(0)
         else:
-            self.setup_message.setText("โมเดลพร้อมแล้ว · Meta+H เริ่ม/หยุดพูด · Meta+Shift+H สลับโหมด")
+            self.setup_message.setText(S.SETUP_MODEL_READY)
             self.setup_progress.setRange(0, 100)
             self.setup_progress.setValue(100)
         if self.download_failure:
@@ -230,18 +422,20 @@ class MainWindow(QMainWindow):
         self.setup_progress.setVisible(not ready or bool(self.download_process))
         shortcut_ready = bool((self.kde_shortcut_state.get("active") and self.kde_shortcut_state.get("mode_active"))
                               or (self.portal_shortcut and self.portal_mode_shortcut))
-        self.onboarding.setVisible(not ready or not shortcut_ready or not self.paste_enabled or bool(self.download_process))
+        self.onboarding.setVisible(self.setup_wizard.isHidden() and
+                                   (not ready or not shortcut_ready or not self.paste_enabled or bool(self.download_process)))
         if self.portal_permission_pending or self.shortcut_installing:
-            self.setup_desktop.setText("กำลังเตรียมปุ่มลัด/การวางข้อความ · หากระบบแสดงหน้าขอสิทธิ์ ให้กดอนุญาต")
+            self.setup_desktop.setText(S.SETUP_DESKTOP_PENDING)
         elif shortcut_ready and self.paste_enabled:
-            self.setup_desktop.setText("ปุ่มลัดและการวางข้อความพร้อมแล้ว")
+            self.setup_desktop.setText(S.SETUP_DESKTOP_READY)
         else:
             missing = []
             if not shortcut_ready:
-                missing.append("ปุ่มลัดยังไม่ครบ")
+                missing.append(S.SETUP_MISSING_SHORTCUT)
             if not self.paste_enabled:
-                missing.append("ยังไม่ได้อนุญาตวางข้อความ")
-            self.setup_desktop.setText(" · ".join(missing) + " · เปิดใช้ได้ในหน้าตั้งค่า")
+                missing.append(S.SETUP_MISSING_PASTE)
+            self.setup_desktop.setText(" · ".join(missing) + S.SETUP_MISSING_SUFFIX)
+        self.sync_setup_wizard()
 
     def build_ui(self):
         root = GlassCanvas()
@@ -260,32 +454,32 @@ class MainWindow(QMainWindow):
         mascot = QLabel()
         mascot.setPixmap(self.app_icon.pixmap(44, 44))
         mascot.setFixedSize(44, 44)
-        mascot.setAccessibleName("เพนกวินถือไมค์ · PhimThaiMaiPen")
+        mascot.setAccessibleName(S.MASCOT_ACCESSIBLE)
         identity.addWidget(mascot)
-        brand = QLabel("PhimThai\nMaiPen")
+        brand = QLabel(S.BRAND)
         brand.setObjectName("brand")
         identity.addWidget(brand)
         sidebar.addLayout(identity)
         sidebar.addSpacing(24)
         self.nav = QListWidget()
         self.nav.setObjectName("navigation")
-        self.nav.setAccessibleName("หน้าหลักของแอป")
-        self.nav.addItems(["พิมพ์ด้วยเสียง", "โมเดล", "ตั้งค่า", "ตรวจสอบระบบ"])
-        for index, tooltip in enumerate(["Transcript", "Models", "Settings", "Diagnostics"]):
+        self.nav.setAccessibleName(S.NAV_ACCESSIBLE)
+        self.nav.addItems(list(S.NAV_PAGES))
+        for index, tooltip in enumerate(S.NAV_TOOLTIPS):
             self.nav.item(index).setToolTip(tooltip)
         sidebar.addWidget(self.nav)
         self.shortcut_hint = QLabel(self.settings.hotkey.replace("META", "Meta"))
         self.shortcut_hint.setObjectName("shortcut")
-        self.shortcut_hint.setToolTip("ปุ่มลัดเริ่มและหยุดพูด · ตั้งค่าได้ในหน้าตั้งค่า")
+        self.shortcut_hint.setToolTip(S.SHORTCUT_HINT_TOOLTIP)
         sidebar.addWidget(self.shortcut_hint)
         self.mode_button = button(PROFILE_NAMES[self.settings.profile], self.cycle_profile)
         self.mode_button.setObjectName("modeSwitch")
-        self.mode_button.setToolTip("สลับโหมด · Smart Mix → Raw → TH → ENG")
+        self.mode_button.setToolTip(S.MODE_TOOLTIP)
         sidebar.addWidget(self.mode_button)
         self.mode_shortcut_hint = QLabel("")
         self.mode_shortcut_hint.setObjectName("muted")
         sidebar.addWidget(self.mode_shortcut_hint)
-        footer = QLabel("ไทย + English\nเสียงอยู่ในเครื่องคุณ")
+        footer = QLabel(S.SIDEBAR_FOOTER)
         footer.setObjectName("muted")
         sidebar.addWidget(footer)
         layout.addWidget(sidebar_panel)
@@ -298,9 +492,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(workspace, 1)
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.build_transcript()
-        self.build_models()
-        self.build_settings()
-        self.build_diagnostics()
+        self.build_models_page()
+        self.build_settings_page()
+        self.build_diagnostics_page()
         self.nav.setCurrentRow(0)
         self.setCentralWidget(root)
 
@@ -329,43 +523,45 @@ class MainWindow(QMainWindow):
         return layout
 
     def build_transcript(self):
-        layout = self.page("พิมพ์ด้วยเสียง", "พูดไทย อังกฤษ หรือสลับภาษาได้ในประโยคเดียว")
+        layout = self.page(S.TRANSCRIPT_TITLE, S.TRANSCRIPT_SUBTITLE)
         self.onboarding = QWidget()
         self.onboarding.setObjectName("onboarding")
         first_run = QVBoxLayout(self.onboarding)
         first_run.setContentsMargins(14, 12, 14, 12)
-        self.setup_message = QLabel("เริ่มต้นครั้งแรก · ระบบจะดาวน์โหลด Typhoon ASR Realtime ประมาณ 462 MB ให้อัตโนมัติ\nดาวน์โหลดเสร็จแล้วใช้แบบออฟไลน์ได้ เลือกโหลด Qwen เพิ่มได้ในหน้าโมเดล")
+        self.setup_message = QLabel(S.SETUP_INTRO)
         self.setup_message.setObjectName("setupMessage")
         self.setup_message.setWordWrap(True)
         first_run.addWidget(self.setup_message)
         self.setup_progress = QProgressBar()
         self.setup_progress.setValue(0)
-        self.setup_progress.setAccessibleName("ความคืบหน้าการเตรียมโมเดล")
+        self.setup_progress.setAccessibleName(S.SETUP_PROGRESS_ACCESSIBLE)
         first_run.addWidget(self.setup_progress)
-        self.setup_desktop = QLabel("ระบบจะเตรียม Meta+H และ Meta+Shift+H ให้ · อนุญาตสิทธิ์เมื่อเดสก์ท็อปถาม")
+        self.setup_desktop = QLabel(S.SETUP_DESKTOP_INTRO)
         self.setup_desktop.setWordWrap(True)
         first_run.addWidget(self.setup_desktop)
         first_actions = QHBoxLayout()
-        self.setup_resume = button("โหลดโมเดลต่อ", lambda: self.download_model(model_id=self.settings.model), True)
-        self.setup_stop = button("หยุดดาวน์โหลด", self.cancel_download)
+        self.setup_resume = button(S.BTN_RESUME_DOWNLOAD, lambda: self.download_model(model_id=self.settings.model), True)
+        self.setup_stop = button(S.BTN_STOP_DOWNLOAD, self.cancel_download)
         first_actions.addWidget(self.setup_resume)
         first_actions.addWidget(self.setup_stop)
-        first_actions.addWidget(button("จัดการโมเดล", lambda: self.nav.setCurrentRow(1)))
-        first_actions.addWidget(button("ตั้งค่าสิทธิ์", lambda: self.nav.setCurrentRow(2)))
+        first_actions.addWidget(button(S.BTN_MANAGE_MODELS, lambda: self.nav.setCurrentRow(1)))
+        first_actions.addWidget(button(S.BTN_PERMISSIONS, lambda: self.nav.setCurrentRow(2)))
         first_run.addLayout(first_actions)
         self.setup_resume.hide()
         self.setup_stop.hide()
         self.onboarding.setVisible(local_model(self.settings.model) is None)
+        # First run gets the wizard; the compact banner covers later gaps.
+        layout.addWidget(self.build_setup_wizard())
         layout.addWidget(self.onboarding)
         row = QHBoxLayout()
-        self.record_button = button("เริ่มพูด", self.toggle_record, True)
+        self.record_button = button(S.BTN_RECORD, self.toggle_record, True)
         self.record_button.setObjectName("recordControl")
         self.record_button.setMinimumSize(168, 48)
-        self.record_button.setToolTip("Start / stop recording")
+        self.record_button.setToolTip(S.RECORD_TOOLTIP)
         row.addWidget(self.record_button)
-        row.addWidget(button("เปิดไฟล์เสียง", self.open_audio))
+        row.addWidget(button(S.BTN_OPEN_AUDIO, self.open_audio))
         row.addStretch()
-        self.cancel_button = button("ยกเลิก", self.cancel)
+        self.cancel_button = button(S.BTN_CANCEL, self.cancel)
         row.addWidget(self.cancel_button)
         layout.addLayout(row)
         self.level = QProgressBar()
@@ -373,36 +569,36 @@ class MainWindow(QMainWindow):
         self.level.setValue(0)
         self.level.setTextVisible(False)
         self.level.setFixedHeight(8)
-        self.level.setAccessibleName("Microphone input level")
+        self.level.setAccessibleName(S.LEVEL_ACCESSIBLE)
         layout.addWidget(self.level)
-        self.status = QLabel("Ready")
+        self.status = QLabel(S.STATUS_IDLE)
         self.status.setWordWrap(True)
         self.status.setObjectName("status")
         layout.addWidget(self.status)
-        transcript_label = QLabel("ข้อความของคุณ")
+        transcript_label = QLabel(S.TRANSCRIPT_LABEL)
         transcript_label.setObjectName("section")
         layout.addWidget(transcript_label)
         self.editor = QPlainTextEdit()
         self.editor.setObjectName("editor")
-        self.editor.setPlaceholderText("เริ่มจากเสียงของคุณ…\n\nข้อความที่ถอดจะปรากฏที่นี่ แล้วแก้ไขได้ตามต้องการ")
-        self.editor.setAccessibleName("Editable transcript")
+        self.editor.setPlaceholderText(S.EDITOR_PLACEHOLDER)
+        self.editor.setAccessibleName(S.EDITOR_ACCESSIBLE)
         layout.addWidget(self.editor, 1)
         actions = QHBoxLayout()
-        paste_button = button("วางในแอป", self.paste)
+        paste_button = button(S.BTN_PASTE, lambda: self.paste())
         paste_button.setObjectName("pasteAction")
         actions.addWidget(paste_button)
-        actions.addWidget(button("คัดลอก", self.copy))
+        actions.addWidget(button(S.BTN_COPY, self.copy))
         actions.addStretch()
-        actions.addWidget(button("แปลอังกฤษ", self.translate))
-        actions.addWidget(button("ถอดใหม่", self.retry))
+        actions.addWidget(button(S.BTN_TRANSLATE, self.translate))
+        actions.addWidget(button(S.BTN_RETRY, self.retry))
         layout.addLayout(actions)
-        self.metrics = QLabel(CATALOG[self.settings.model].name + " · เวลาและอุปกรณ์จะแสดงเมื่อถอดเสียงเสร็จ")
+        self.metrics = QLabel(S.METRICS_PLACEHOLDER.format(model=CATALOG[self.settings.model].name))
         self.metrics.setObjectName("muted")
         self.metrics.setWordWrap(True)
         layout.addWidget(self.metrics)
 
     def build_models(self):
-        layout = self.page("โมเดลถอดเสียง", "เลือก ดาวน์โหลด หรือนำเข้าโมเดลของคุณ · ใช้งานในเครื่อง")
+        layout = self.page(S.MODELS_TITLE, S.MODELS_SUBTITLE)
         self.model_list = QListWidget()
         self.model_list.currentRowChanged.connect(self.model_details)
         layout.addWidget(self.model_list)
@@ -410,7 +606,7 @@ class MainWindow(QMainWindow):
         self.model_description.setWordWrap(True)
         self.model_description.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.model_description)
-        technical_toggle = QCheckBox("แสดงข้อมูลทางเทคนิค")
+        technical_toggle = QCheckBox(S.MODELS_TECHNICAL)
         layout.addWidget(technical_toggle)
         self.model_technical = QLabel()
         self.model_technical.setObjectName("muted")
@@ -424,112 +620,129 @@ class MainWindow(QMainWindow):
         self.model_beta_warning.setWordWrap(True)
         layout.addWidget(self.model_beta_warning)
         actions = QHBoxLayout()
-        self.download_button = button("ดาวน์โหลด / ซ่อมไฟล์", self.download_model, True)
+        self.download_button = button(S.BTN_DOWNLOAD, self.download_model, True)
         actions.addWidget(self.download_button)
-        actions.addWidget(button("หยุดโหลด", self.cancel_download))
+        actions.addWidget(button(S.BTN_STOP_DOWNLOAD_SHORT, self.cancel_download))
         actions.addStretch()
-        actions.addWidget(button("เลือกใช้", self.use_model))
-        actions.addWidget(button("ลบโมเดล", self.remove_model))
+        actions.addWidget(button(S.BTN_USE_MODEL, self.use_model))
+        actions.addWidget(button(S.BTN_REMOVE_MODEL, self.remove_model))
         layout.addLayout(actions)
-        self.import_button = button("นำเข้าโมเดลจากโฟลเดอร์…", self.import_model)
+        self.import_button = button(S.BTN_IMPORT_MODEL, self.import_model)
         layout.addWidget(self.import_button)
         self.download_progress = QProgressBar()
         self.download_progress.setValue(0)
         layout.addWidget(self.download_progress)
-        self.download_status = QLabel("หยุดแล้วโหลดต่อได้ · ตรวจความสมบูรณ์ของไฟล์ก่อนเปิดใช้")
+        self.download_status = QLabel(S.DOWNLOAD_HINT)
         self.download_status.setWordWrap(True)
         layout.addWidget(self.download_status)
         layout.addStretch()
 
     def build_settings(self):
-        layout = self.page("ตั้งค่า", "ไมค์ ภาษา และปุ่มลัด · การเปลี่ยนแปลงมีผลกับงานถัดไป")
+        layout = self.page(S.SETTINGS_TITLE, S.SETTINGS_SUBTITLE)
         actions = QHBoxLayout()
-        actions.addWidget(button("บันทึกการตั้งค่า", self.save, True))
+        actions.addWidget(button(S.BTN_SAVE, self.save, True))
+        self.unsaved_label = QLabel(S.SETTINGS_UNSAVED)
+        self.unsaved_label.setObjectName("unsaved")
+        self.unsaved_label.setAccessibleName(S.SETTINGS_UNSAVED)
+        self.unsaved_label.hide()
+        actions.addWidget(self.unsaved_label)
         actions.addStretch()
-        actions.addWidget(button("เปิดใช้ปุ่มลัด", self.enable_shortcut))
-        actions.addWidget(button("อนุญาตวางข้อความ", lambda: self.portal_command("enable_paste", persist=self.remember_desktop.isChecked())))
+        actions.addWidget(button(S.BTN_ENABLE_SHORTCUT, self.enable_shortcut))
+        actions.addWidget(button(S.BTN_ENABLE_PASTE, lambda: self.portal_command("enable_paste", persist=self.remember_desktop.isChecked())))
         layout.addLayout(actions)
         form = QFormLayout()
         form.setSpacing(12)
         self.microphone = QComboBox()
         self.refresh_microphones()
-        form.addRow("ไมโครโฟน", self.microphone)
+        form.addRow(S.LABEL_MICROPHONE, self.microphone)
         mic_actions = QHBoxLayout()
-        mic_actions.addWidget(button("ตรวจหาไมค์", self.refresh_microphones))
-        mic_actions.addWidget(button("ทดสอบไมค์ 5 วินาที", self.test_mic))
+        mic_actions.addWidget(button(S.BTN_REFRESH_MICS, self.refresh_microphones))
+        mic_actions.addWidget(button(S.BTN_TEST_MIC, self.test_mic))
         form.addRow(mic_actions)
-        self.profile = self.combo([("Smart Mix · ปรับข้อความให้อ่านง่าย", "smart"), ("Raw · ถอดตามที่พูด", "raw"), ("TH → ENG · พูดไทย แปลอังกฤษ", "th_to_eng")], self.settings.profile)
+        self.profile = self.combo(S.PROFILE_CHOICES, self.settings.profile)
         self.profile.currentIndexChanged.connect(lambda: self.mode_button.setText(PROFILE_NAMES[self.profile.currentData()]))
-        form.addRow("รูปแบบข้อความ", self.profile)
-        self.language = self.combo([("อัตโนมัติ · ไทย + English", "auto"), ("ภาษาไทย", "Thai"), ("English", "English")], self.settings.language)
-        form.addRow("ภาษาที่พูด", self.language)
-        self.language_hint = QLabel("Typhoon รองรับเสียงภาษาไทย · ถ้าพูดอังกฤษหรือผสมสองภาษา ให้เลือก Qwen ในหน้าโมเดล")
+        form.addRow(S.LABEL_PROFILE, self.profile)
+        self.language = self.combo(S.LANGUAGE_CHOICES, self.settings.language)
+        form.addRow(S.LABEL_LANGUAGE, self.language)
+        self.language_hint = QLabel(S.LANGUAGE_HINT)
         self.language_hint.setWordWrap(True)
         self.language_hint.setObjectName("muted")
         form.addRow(self.language_hint)
-        self.device = self.combo([("อัตโนมัติ · CPU แนะนำ", "auto"), ("CPU · แนะนำ", "cpu"), ("GPU · Beta", "gpu"), ("NPU · Beta", "npu")], self.settings.device)
-        form.addRow("ประมวลผลด้วย", self.device)
+        self.device = self.combo(S.DEVICE_CHOICES, self.settings.device)
+        form.addRow(S.LABEL_DEVICE, self.device)
         for value in ("gpu", "npu"):
             self.device.setItemData(self.device.findData(value), QBrush(QColor("#9b2c39")), Qt.ItemDataRole.ForegroundRole)
         self.beta_warning = QLabel(BETA_WARNING)
         self.beta_warning.setWordWrap(True)
         self.beta_warning.setObjectName("betaWarning")
         form.addRow(self.beta_warning)
-        self.preference = self.combo([("ตอบสนองเร็ว", "speed"), ("ประหยัดพลังงาน · ต้องมีผลวัด", "power")], self.settings.preference)
+        self.preference = self.combo(S.PREFERENCE_CHOICES, self.settings.preference)
         self.preference.hide()  # Auto remains on CPU until accelerators leave Beta.
         self.threads = QSpinBox()
         self.threads.setRange(1, os.cpu_count() or 1)
         self.threads.setValue(self.settings.cpu_threads)
-        form.addRow("CPU threads", self.threads)
-        self.paste_mode = self.combo([("ตรวจและแก้ข้อความก่อนวาง", "review"), ("วางทันทีเมื่อถอดเสียงเสร็จ", "immediate")], self.settings.paste_mode)
-        form.addRow("เมื่อพูดจบ", self.paste_mode)
+        form.addRow(S.LABEL_THREADS, self.threads)
+        self.paste_mode = self.combo(S.PASTE_MODE_CHOICES, self.settings.paste_mode)
+        form.addRow(S.LABEL_PASTE_MODE, self.paste_mode)
         self.hotkey = QLineEdit(self.settings.hotkey)
-        form.addRow("ปุ่มลัดเริ่ม / หยุด", self.hotkey)
-        self.shortcut_status = QLabel("กำลังตรวจปุ่มลัด…")
+        form.addRow(S.LABEL_HOTKEY, self.hotkey)
+        self.shortcut_status = QLabel(S.SHORTCUT_CHECKING)
         self.shortcut_status.setObjectName("muted")
         self.shortcut_status.setWordWrap(True)
         form.addRow(self.shortcut_status)
-        self.history = QCheckBox("เก็บประวัติข้อความในเครื่อง")
+        self.history = QCheckBox(S.CHECK_HISTORY)
         self.history.setChecked(self.settings.keep_history)
         form.addRow(self.history)
-        self.audio_history = QCheckBox("เก็บประวัติเสียงในเครื่อง")
+        self.audio_history = QCheckBox(S.CHECK_AUDIO_HISTORY)
         self.audio_history.setChecked(self.settings.keep_audio_history)
         form.addRow(self.audio_history)
-        self.vad = QCheckBox("ตรวจช่วงพูดและตัดความเงียบต้น–ท้าย")
+        self.vad = QCheckBox(S.CHECK_VAD)
         self.vad.setChecked(self.settings.vad)
         form.addRow(self.vad)
-        self.reduced_transparency = QCheckBox("ลดความโปร่งใส เพิ่มความชัดของพื้นหลัง")
+        self.reduced_transparency = QCheckBox(S.CHECK_REDUCED_TRANSPARENCY)
         self.reduced_transparency.setChecked(self.settings.reduced_transparency)
         self.reduced_transparency.toggled.connect(lambda checked: apply_style(QApplication.instance(), reduced_transparency=checked))
         form.addRow(self.reduced_transparency)
-        self.popup_enabled = QCheckBox("แสดง Popup เล็กด้านซ้ายขณะพูด")
+        self.popup_enabled = QCheckBox(S.CHECK_POPUP)
         self.popup_enabled.setChecked(self.settings.popup_enabled)
         form.addRow(self.popup_enabled)
-        self.sound_feedback = QCheckBox("เสียงแจ้งเริ่ม หยุด และวางข้อความ")
+        self.sound_feedback = QCheckBox(S.CHECK_SOUND)
         self.sound_feedback.setChecked(self.settings.sound_feedback)
         form.addRow(self.sound_feedback)
         layout.addLayout(form)
-        layout.addWidget(QLabel("พจนานุกรมส่วนตัว · คำเดิม ตามด้วย Tab และคำที่ให้แทน"))
+        layout.addWidget(QLabel(S.DICTIONARY_LABEL))
         self.dictionary = QPlainTextEdit(self.settings.dictionary)
-        self.dictionary.setAccessibleName("Custom replacement dictionary")
+        self.dictionary.setAccessibleName(S.DICTIONARY_ACCESSIBLE)
         self.dictionary.setMaximumHeight(100)
         layout.addWidget(self.dictionary)
-        self.remember_desktop = QCheckBox("จำสิทธิ์วางข้อความและปุ่มลัดที่ขอผ่านระบบ")
+        self.remember_desktop = QCheckBox(S.CHECK_REMEMBER_DESKTOP)
         self.remember_desktop.setChecked(self.settings.remember_desktop)
-        self.remember_desktop.setToolTip("Enable before granting shortcut/paste permission, then Save. The desktop decides whether permission can persist.")
+        self.remember_desktop.setToolTip(S.REMEMBER_DESKTOP_TOOLTIP)
         layout.addWidget(self.remember_desktop)
-        layout.addWidget(button("ลบประวัติข้อความและเสียงที่บันทึก", self.clear_history))
+        layout.addWidget(button(S.BTN_CLEAR_HISTORY, self.clear_history))
+        for combo in (self.microphone, self.profile, self.language, self.device, self.preference, self.paste_mode):
+            combo.currentIndexChanged.connect(self.update_unsaved_indicator)
+        self.threads.valueChanged.connect(self.update_unsaved_indicator)
+        self.hotkey.textChanged.connect(self.update_unsaved_indicator)
+        self.dictionary.textChanged.connect(self.update_unsaved_indicator)
+        for check in (self.history, self.audio_history, self.vad, self.reduced_transparency,
+                      self.popup_enabled, self.sound_feedback, self.remember_desktop):
+            check.toggled.connect(self.update_unsaved_indicator)
 
     def build_diagnostics(self):
-        layout = self.page("เครื่องของคุณ", "ตรวจไมค์ โมเดล และอุปกรณ์ที่ใช้ได้ พร้อมข้อมูลสำหรับแก้ปัญหา")
+        layout = self.page(S.DIAGNOSTICS_TITLE, S.DIAGNOSTICS_SUBTITLE)
         self.diagnostic_summary = QLabel()
         self.diagnostic_summary.setWordWrap(True)
         layout.addWidget(self.diagnostic_summary)
         self.diagnostics = QPlainTextEdit()
         self.diagnostics.setReadOnly(True)
-        self.diagnostics.setAccessibleName("Device diagnostics")
+        self.diagnostics.setAccessibleName(S.DIAGNOSTICS_ACCESSIBLE)
         layout.addWidget(self.diagnostics)
-        layout.addWidget(button("ตรวจสอบใหม่", self.refresh_diagnostics))
+        diagnostic_actions = QHBoxLayout()
+        diagnostic_actions.addWidget(button(S.BTN_REFRESH_DIAGNOSTICS, self.refresh_diagnostics))
+        diagnostic_actions.addWidget(button(S.BTN_COPY_REPORT, self.copy_diagnostic_report, True))
+        diagnostic_actions.addStretch()
+        layout.addLayout(diagnostic_actions)
         self.refresh_diagnostics()
 
     @staticmethod
@@ -543,18 +756,19 @@ class MainWindow(QMainWindow):
     def refresh_microphones(self):
         selected = self.microphone.currentData() if self.microphone.count() else self.settings.microphone
         self.microphone.clear()
-        self.microphone.addItem("ไมค์เริ่มต้นของระบบ", "")
+        self.microphone.addItem(S.MIC_SYSTEM_DEFAULT, "")
         for device in QMediaDevices.audioInputs():
             self.microphone.addItem(device.description(), bytes(device.id()).hex())
         index = self.microphone.findData(selected)
         if index < 0:
-            self.microphone.addItem("Microphone disconnected — select an available input", selected)
+            self.microphone.addItem(S.MIC_DISCONNECTED, selected)
             index = self.microphone.count() - 1
             self.microphone.model().item(index).setEnabled(False)
         self.microphone.setCurrentIndex(index)
 
-    def current_settings(self):
-        return replace(self.settings, microphone=self.microphone.currentData(), profile=self.profile.currentData(),
+    def form_values(self):
+        """Raw settings-form values (unvalidated) keyed like Settings fields."""
+        return dict(microphone=self.microphone.currentData(), profile=self.profile.currentData(),
             language=self.language.currentData(), device=self.device.currentData(), cpu_threads=self.threads.value(),
             paste_mode=self.paste_mode.currentData(), hotkey=self.hotkey.text().strip(),
             preference=self.preference.currentData(),
@@ -562,8 +776,22 @@ class MainWindow(QMainWindow):
             dictionary=self.dictionary.toPlainText(), keep_history=self.history.isChecked(),
             keep_audio_history=self.audio_history.isChecked(), remember_desktop=self.remember_desktop.isChecked(),
             reduced_transparency=self.reduced_transparency.isChecked(),
-            popup_enabled=self.popup_enabled.isChecked(), sound_feedback=self.sound_feedback.isChecked(),
-            onboarding_done=True).validate()
+            popup_enabled=self.popup_enabled.isChecked(), sound_feedback=self.sound_feedback.isChecked())
+
+    def current_settings(self):
+        return replace(self.settings, onboarding_done=True, **self.form_values()).validate()
+
+    def settings_form_dirty(self):
+        try:
+            values = self.form_values()
+        except AttributeError:  # Form still being built.
+            return False
+        return any(getattr(self.settings, key) != value for key, value in values.items())
+
+    def update_unsaved_indicator(self, *_args):
+        label = getattr(self, "unsaved_label", None)
+        if label is not None:
+            label.setVisible(self.settings_form_dirty())
 
     def save(self):
         try:
@@ -579,15 +807,23 @@ class MainWindow(QMainWindow):
                     # A pending permission grant may write a new one-use token.
                     # Process opt-out after that grant in the existing bridge.
                     self.portal_command("forget")
-            self.set_status("บันทึกการตั้งค่าแล้ว")
+            self.set_status(S.SETTINGS_SAVED)
+            LOG.info("settings saved")
             if self.settings.hotkey != previous_hotkey:
                 self.enable_shortcut()
             self.refresh_shortcut_status()
         except Exception as exc:
             self.error(str(exc))
+        self.update_unsaved_indicator()
 
     def set_status(self, text):
-        self.status.setText(text)
+        self.status.setText(S.job_message(text))
+
+    def job_status_changed(self, text):
+        self.refresh_state()
+        if self.recording:
+            return  # The listening timer owns the status line while recording.
+        self.set_status(text)
 
     def refresh_shortcut_status(self):
         from .kde import is_kde
@@ -603,34 +839,36 @@ class MainWindow(QMainWindow):
         trigger = state.get("trigger") if state.get("active") else self.portal_shortcut
         if trigger:
             self.shortcut_hint.setText(trigger)
-            self.shortcut_status.setText(f"{trigger} · พร้อมเริ่มและหยุดพูด")
+            self.shortcut_status.setText(S.SHORTCUT_TRIGGER_READY.format(trigger=trigger))
         else:
-            self.shortcut_hint.setText("ตั้งค่าปุ่มลัด")
-            self.shortcut_status.setText("ยังไม่เปิดใช้ปุ่มลัด · กดเปิดใช้ปุ่มลัดด้านบน")
+            self.shortcut_hint.setText(S.SHORTCUT_SET_UP)
+            self.shortcut_status.setText(S.SHORTCUT_NOT_ENABLED)
         mode_trigger = state.get("mode_trigger", "") if state.get("mode_active") else self.portal_mode_shortcut
         self.mode_shortcut_hint.setText(mode_trigger)
         if mode_trigger:
-            self.shortcut_status.setText(self.shortcut_status.text() + f"\n{mode_trigger} · สลับโหมด")
+            self.shortcut_status.setText(self.shortcut_status.text() + S.SHORTCUT_MODE_LINE.format(trigger=mode_trigger))
         self.update_setup_view()
 
     def cycle_profile(self):
         profiles = list(PROFILE_NAMES)
-        next_profile = profiles[(profiles.index(self.profile.currentData()) + 1) % len(profiles)]
+        current = self.settings.profile if self.settings.profile in profiles else self.profile.currentData()
+        next_profile = profiles[(profiles.index(current) + 1) % len(profiles)]
         try:
             selected = replace(self.settings, profile=next_profile)
             save_settings(selected)
         except Exception as exc:
-            self.error(f"เปลี่ยนโหมดไม่สำเร็จ: {exc}")
+            self.error(S.MODE_SAVE_FAILED.format(error=exc))
             return
         self.settings = selected
         self.profile.setCurrentIndex(self.profile.findData(next_profile))
-        message = f"โหมด {PROFILE_NAMES[next_profile]}"
+        message = S.STATUS_MODE.format(name=PROFILE_NAMES[next_profile])
         if self.recording or self.jobs.busy:
-            message += " · ใช้กับการพูดครั้งถัดไป"
+            message += S.STATUS_MODE_NEXT
         if next_profile == "th_to_eng" and local_model("translate-th-en") is None:
-            message += " · ต้องดาวน์โหลดโมเดลแปลภาษาในหน้าโมเดล"
+            message += S.STATUS_MODE_NEEDS_TRANSLATION
         self.set_status(message)
         self.feedback.mode(PROFILE_NAMES[next_profile])
+        self.update_unsaved_indicator()
 
     def kde_shortcut_command(self, trigger=None):
         # D-Bus timeouts and registration must never freeze recording controls.
@@ -638,7 +876,7 @@ class MainWindow(QMainWindow):
             return
         if self.shortcut_process is not None:
             if trigger is not None:
-                self.error("รอตรวจปุ่มลัดเสร็จสักครู่ แล้วลองใหม่")
+                self.error(S.ERR_SHORTCUT_BUSY)
             return
         process = QProcess(self)
         self.shortcut_process = process
@@ -651,14 +889,14 @@ class MainWindow(QMainWindow):
             try:
                 state = json.loads(bytes(process.readAllStandardOutput()))
             except (ValueError, TypeError):
-                state = {"active": False, "error": "ตรวจปุ่มลัดไม่สำเร็จ ลองเปิดใช้ปุ่มลัดอีกครั้ง"}
+                state = {"active": False, "error": S.ERR_SHORTCUT_CHECK_FAILED}
             self.kde_shortcut_state = state
             self.show_shortcut_status()
             if trigger is not None:
                 if state.get("active"):
-                    self.set_status(f"ปุ่มลัด {state['trigger']} พร้อมใช้งาน")
+                    self.set_status(S.SHORTCUT_READY.format(trigger=state["trigger"]))
                 else:
-                    self.error(state.get("error", "เปิดใช้ปุ่มลัดไม่สำเร็จ"))
+                    self.error(state.get("error") or S.ERR_SHORTCUT_FAILED)
             process.deleteLater()
             if self.quitting:
                 QTimer.singleShot(0, self.quit)
@@ -678,47 +916,71 @@ class MainWindow(QMainWindow):
         else:
             self.portal_command("shortcuts", trigger=self.hotkey.text(), persist=self.remember_desktop.isChecked())
 
-    def error(self, message):
-        self.set_status("ข้อผิดพลาด: " + message)
-        self.nav.setCurrentRow(0)
+    def error(self, message, jump=False):
+        """Show an error. ``jump`` brings the dictation page forward (dictation/hotkey errors only)."""
+        message = S.job_message(message)
+        self.set_status(S.ERROR_PREFIX + message)
+        if jump and self.isVisible():
+            # A hidden window relies on the HUD; never reopen it for an error.
+            self.nav.setCurrentRow(0)
         self.feedback.error(message)
 
     def job_failed(self, message):
+        LOG.warning("job failed")
         warnings = self.cleanup_temporary_audio()
-        self.error("; ".join([message, *warnings]))
+        self.error("; ".join([S.job_message(message), *warnings]), jump=True)
+        self.refresh_state()
 
     def toggle_record(self):
+        if not self.toggle_debounce.accept():
+            LOG.info("toggle ignored (debounce)")
+            return
         if self.recording:
             self.finish_recording()
             return
-        if self.jobs.busy:
-            self.error("A job is still running. Finish or cancel it before recording again.")
-            return
         try:
-            self.record_settings = self.current_settings()
+            # Recording always uses SAVED settings (profile included, via
+            # cycle_profile). Unsaved or invalid form text cannot break it.
+            self.record_settings = self.settings
             if not self.test_microphone and self.downloading_model == self.record_settings.model:
-                raise RuntimeError("กำลังเตรียมโมเดล รอให้ดาวน์โหลดเสร็จก่อน แล้วกด Meta+H เพื่อเริ่มพูด")
+                raise RuntimeError(S.ERR_MODEL_DOWNLOADING)
             if not self.test_microphone and local_model(self.record_settings.model) is None:
-                raise RuntimeError("ยังไม่มีโมเดลพร้อมใช้ กดโหลดโมเดลต่อ หรือนำเข้าโมเดลในหน้าโมเดล")
+                raise RuntimeError(S.ERR_NO_MODEL)
+            if not self.test_microphone and self.queue_full():
+                raise RuntimeError(S.ERR_QUEUE_FULL)
+            queued = 0 if self.test_microphone else self.queued_jobs()
             self.audio_path = Path(self.temp.name) / (uuid.uuid4().hex + ".wav")
             self.recorder.start(self.audio_path, self.record_settings.microphone)
             self.recording = True
+            LOG.info("record start (queued ahead: %d)", queued)
             self.record_started = time.monotonic()
-            self.record_button.setText("หยุดพูด")
+            self.record_button.setText(S.BTN_STOP)
             self.record_button.setEnabled(True)
             self.record_timer.start(200)
             self.nav.setCurrentRow(0)
-            self.set_status("กำลังฟัง… พูดจบแล้วกดหยุดพูดหรือปุ่มลัดอีกครั้ง")
             self.feedback.set_profile(self.record_settings.profile)
             self.feedback.listening()
+            status = S.STATUS_LISTENING_QUEUED if queued else S.STATUS_LISTENING
+            if not self.test_microphone:
+                self.prewarm(self.record_settings)
+                if not self.jobs_warm():
+                    preparing = getattr(self.feedback, "preparing", None)
+                    if callable(preparing):
+                        preparing()
+                    if not queued:
+                        status = S.STATUS_PREPARING
+            self.set_status(status)
         except Exception as exc:
             self.recorder.stop()
             self.test_microphone = False
-            self.error(str(exc))
+            self.recording = False
+            LOG.warning("record start failed: %s", exc)
+            self.error(str(exc), jump=True)
 
     def record_tick(self):
         seconds = int(time.monotonic() - self.record_started)
-        self.set_status(f"กำลังฟัง…  {seconds // 60:02d}:{seconds % 60:02d}  ·  กดอีกครั้งเมื่อพูดจบ")
+        if self.status.text() != S.STATUS_PREPARING or seconds >= 3:
+            self.set_status(S.STATUS_LISTENING_TICK.format(minutes=seconds // 60, seconds=seconds % 60))
         self.feedback.tick(seconds)
         if seconds >= (5 if self.test_microphone else 900):
             self.finish_recording()
@@ -727,41 +989,43 @@ class MainWindow(QMainWindow):
         self.recording = False
         self.record_timer.stop()
         valid = self.recorder.stop()
-        self.record_button.setText("เริ่มพูด")
+        LOG.info("record stop (audio captured: %s)", bool(valid))
+        self.record_button.setText(S.BTN_RECORD)
         self.update_setup_view()
         if self.test_microphone:
             self.test_microphone = False
             self.audio_path.unlink(missing_ok=True)
             self.audio_path = None
-            self.set_status("Microphone test finished" if valid else "No audio captured")
+            self.set_status(S.STATUS_MIC_TEST_DONE if valid else S.STATUS_MIC_TEST_SILENT)
             self.feedback.cancel()
         elif valid:
             self.transcribe(self.audio_path, self.record_settings)
         else:
-            self.error("No audio captured. Check the microphone.")
+            self.error(S.ERR_NO_AUDIO, jump=True)
 
     def capture_error(self, message):
         self.cancel()
-        self.error(message)
+        self.error(message, jump=True)
 
     def test_mic(self):
         if self.recording or self.jobs.busy:
-            self.error("Finish the current job before testing the microphone")
+            self.error(S.ERR_BUSY_TEST_MIC)
             return
         self.test_microphone = True
+        self.toggle_debounce.reset()
         self.toggle_record()
 
     def open_audio(self):
-        if self.recording or self.jobs.busy:
-            self.error("Finish or cancel the current job first")
+        if self.recording:
+            self.error(S.ERR_BUSY_RECORDING)
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Open audio", "", "Audio (*.wav *.mp3 *.flac *.ogg *.m4a);;All files (*)")
+        path, _ = QFileDialog.getOpenFileName(self, S.OPEN_AUDIO_TITLE, "", S.OPEN_AUDIO_FILTER)
         if path:
             try:
                 target = Path(self.temp.name) / (uuid.uuid4().hex + Path(path).suffix)
                 shutil.copyfile(path, target)
                 self.audio_path = target
-                self.transcribe(target, self.current_settings())
+                self.transcribe(target, self.settings)
             except Exception as exc:
                 self.error(str(exc))
 
@@ -771,38 +1035,50 @@ class MainWindow(QMainWindow):
         self.last_request = (path, settings)
         try:
             if self.downloading_model == settings.model or (settings.profile == "th_to_eng" and self.downloading_model == "translate-th-en"):
-                raise RuntimeError("Wait for the selected model download or repair to finish")
+                raise RuntimeError(S.ERR_WAIT_MODEL_DOWNLOAD)
+            ahead = self.queued_jobs()
             self.jobs.submit(settings, action="transcribe", audio=str(path))
-            self.feedback.processing()
+            LOG.info("job submit transcribe (ahead: %d)", ahead)
+            queued = getattr(self.feedback, "queued", None)
+            if ahead and callable(queued):
+                queued(ahead)
+                self.set_status(S.STATUS_QUEUED.format(count=ahead))
+            else:
+                self.feedback.processing()
         except Exception as exc:
-            self.error(str(exc))
+            self.error(str(exc), jump=True)
+        self.refresh_state()
 
     def retry(self):
-        if self.recording or self.jobs.busy:
-            self.error("Finish or cancel the current job first")
+        if self.recording:
+            self.error(S.ERR_BUSY_RECORDING)
         elif self.last_request and self.last_request[0].exists():
-            self.transcribe(self.last_request[0], self.current_settings())
+            self.transcribe(self.last_request[0], self.settings)
         else:
-            self.error("Record or open an audio file first")
+            self.error(S.ERR_NOTHING_TO_RETRY)
 
     def translate(self):
-        if self.jobs.busy or self.recording:
-            self.error("Finish or cancel the current job first")
+        if self.recording:
+            self.error(S.ERR_BUSY_RECORDING)
         elif self.downloading_model == "translate-th-en":
-            self.error("Wait for the translation model download or repair to finish")
+            self.error(S.ERR_WAIT_TRANSLATION_DOWNLOAD)
         elif self.editor.toPlainText().strip():
             try:
-                self.jobs.submit(self.current_settings(), action="translate", text=self.editor.toPlainText())
+                self.jobs.submit(self.settings, action="translate", text=self.editor.toPlainText())
+                LOG.info("job submit translate")
             except Exception as exc:
                 self.error(str(exc))
+            self.refresh_state()
 
     def completed(self, result):
         job_settings = Settings(**result["settings"])
+        LOG.info("job result (no_speech: %s, characters: %d)", bool(result.get("no_speech")),
+                 len(result.get("text", "") or ""))
+        self.refresh_state()
         if result.get("no_speech"):
             warnings = self.cleanup_temporary_audio()
-            self.set_status("No speech detected. Check the microphone or disable speech detection for a quiet voice." +
-                            (" " + "; ".join(warnings) if warnings else ""))
-            self.feedback.error("ไม่พบเสียงพูด ลองตรวจไมโครโฟน")
+            self.set_status(S.ERR_NO_SPEECH + (" " + "; ".join(warnings) if warnings else ""))
+            self.feedback.error(S.HUD_NO_SPEECH)
             return
         self.onboarding.hide()
         # A transcript must remain available even when optional persistence fails.
@@ -815,7 +1091,7 @@ class MainWindow(QMainWindow):
                 save_settings(self.settings)
             except OSError as exc:
                 self.settings.onboarding_done = False
-                warnings.append(f"Transcript ready; could not save setup state: {exc}")
+                warnings.append(S.WARN_SETUP_STATE.format(error=exc))
         self.metrics.setText(f"{result.get('model', '')} · {result.get('device', '')} · {result.get('elapsed', 0):.1f}s")
         if job_settings.keep_history:
             try:
@@ -825,7 +1101,7 @@ class MainWindow(QMainWindow):
                 path.write_text(result.get("text", ""), encoding="utf-8")
                 path.chmod(0o600)
             except OSError as exc:
-                warnings.append(f"Transcript ready; history could not be saved: {exc}")
+                warnings.append(S.WARN_HISTORY.format(error=exc))
         if job_settings.keep_audio_history and result.get("source_audio"):
             created = False
             try:
@@ -844,93 +1120,201 @@ class MainWindow(QMainWindow):
                         destination.unlink(missing_ok=True)
                     except OSError:
                         pass
-                warnings.append(f"Transcript ready; audio history could not be saved: {exc}")
+                warnings.append(S.WARN_AUDIO_HISTORY.format(error=exc))
         warnings.extend(self.cleanup_temporary_audio())
-        self.set_status("; ".join(warnings) or "Transcript ready — edit, copy, or paste")
+        self.set_status("; ".join(warnings) or S.STATUS_TRANSCRIPT_READY)
         if job_settings.paste_mode == "immediate" and result.get("text"):
             self.paste(automatic=True)
+        elif self.recording:
+            pass  # Never steal focus or HUD from a newer recording.
         else:
             self.feedback.success()
             self.showNormal()
             self.raise_()
 
+    def protected_audio(self):
+        """Audio that cleanup must keep: Retry's audio, the live recording, queued jobs."""
+        keep = set()
+        if self.last_request:
+            keep.add(Path(self.last_request[0]))
+        if self.recording and self.audio_path:
+            keep.add(Path(self.audio_path))
+        jobs = []
+        try:
+            jobs = list(self.jobs.pending)
+        except (AttributeError, TypeError):
+            pass
+        active = getattr(self.jobs, "active", None)
+        if isinstance(active, dict):
+            jobs.append(active)
+        for job in jobs:
+            if isinstance(job, dict) and job.get("audio"):
+                keep.add(Path(job["audio"]))
+        return keep
+
     def cleanup_temporary_audio(self):
-        retained = self.last_request[0] if self.last_request else None
+        retained = self.protected_audio()
         warnings = []
         for audio in Path(self.temp.name).iterdir():
-            if audio.is_file() and audio != retained:
+            if audio.is_file() and audio not in retained:
                 try:
                     audio.unlink(missing_ok=True)
                 except OSError as exc:
-                    warnings.append(f"Could not remove temporary audio: {exc}")
+                    warnings.append(S.WARN_TEMP_AUDIO.format(error=exc))
         return warnings
 
     def clipboard_restored(self):
         self.paste_busy = False
         self.paste_committed = False
-        if not self.recording and not self.jobs.busy and self.status.text().startswith("ส่งคำสั่งวางแล้ว"):
-            self.set_status("วางข้อความแล้ว · คืน clipboard เรียบร้อย")
+        if not self.recording and not self.jobs.busy and self.status.text() == S.PASTE_SENT:
+            self.set_status(S.PASTE_DONE)
+        self.refresh_state()
+        if self.paste_queue:
+            QTimer.singleShot(0, self.drain_paste_queue)
         if self.quitting:
             QTimer.singleShot(0, self.quit)
+
+    def drain_paste_queue(self):
+        """Paste a transcript that finished while an earlier paste was still running."""
+        if not self.paste_queue or self.quitting:
+            return
+        if self.paste_busy or self.paste_inflight or self.paste_committed or self.paste_timer.isActive():
+            return
+        text = self.paste_queue.popleft()
+        self.paste(automatic=True, text=text)
+
+    def escape_pressed(self):
+        """Esc stops a pending paste countdown or the current recording, nothing else."""
+        if self.paste_timer.isActive() and not self.paste_committed and not self.paste_inflight:
+            self.abort_pending_paste(S.PASTE_CANCELLED)
+            self.feedback.cancel()
+        elif self.recording:
+            self.record_timer.stop()
+            self.recorder.stop()
+            self.recording = False
+            self.record_button.setText(S.BTN_RECORD)
+            if self.audio_path:
+                self.audio_path.unlink(missing_ok=True)
+            self.test_microphone = False
+            self.feedback.cancel()
+            self.set_status(S.STATUS_CANCELLED)
+            LOG.info("record cancelled (Esc)")
+            self.update_setup_view()
 
     def cancel(self):
         self.feedback.cancel()
         self.paste_busy = self.paste_committed
         self.paste_request_id = None
         self.paste_timer.stop()
+        self.paste_countdown.stop()
+        self.paste_queue.clear()
         if not self.paste_committed:
             self.clipboard.restore()
         if self.recording:
             self.record_timer.stop()
             self.recorder.stop()
             self.recording = False
-            self.record_button.setText("เริ่มพูด")
+            self.record_button.setText(S.BTN_RECORD)
             if self.audio_path:
                 self.audio_path.unlink(missing_ok=True)
         self.test_microphone = False
+        self.toggle_debounce.reset()
         self.jobs.cancel()
+        LOG.info("cancel")
+        self.refresh_state()
         self.update_setup_view()
 
     def copy(self):
         if self.paste_committed:
-            self.error("รอการวางครั้งก่อนจบ แล้วลองคัดลอกอีกครั้ง")
+            self.error(S.COPY_WAIT_PREVIOUS)
             return
         self.paste_busy = False
         self.paste_request_id = None
         self.paste_timer.stop()
+        self.paste_countdown.stop()
         self.clipboard.restore()
         QGuiApplication.clipboard().setText(self.editor.toPlainText())
-        self.set_status("Copied — clipboard kept for manual pasting")
+        self.set_status(S.COPIED)
+        self.refresh_state()
 
-    def paste(self, automatic=False):
+    def copy_fallback(self, text, status=S.COPIED_FALLBACK):
+        """Paste is impossible: leave the text on the clipboard and say so (not an error)."""
+        try:
+            QGuiApplication.clipboard().setText(text)
+        except Exception as exc:  # Best effort; the editor still has the text.
+            LOG.warning("clipboard fallback failed: %s", exc)
+        LOG.info("paste outcome: copied fallback")
+        if not self.recording:
+            self.set_status(status)
+            copied = getattr(self.feedback, "copied", None)
+            if callable(copied):
+                copied(hint=S.COPIED_FALLBACK)
+            else:
+                self.feedback.success()
+        self.refresh_state()
+
+    def paste(self, automatic=False, text=None):
+        if text is None:
+            text = self.editor.toPlainText()
         if self.paste_inflight:
-            self.error("รอการวางครั้งก่อนจบ แล้วลองวางอีกครั้ง")
+            if automatic and text:
+                self.paste_queue.append(text)
+                return
+            self.error(S.PASTE_WAIT_PREVIOUS)
             return
         if self.paste_timer.isActive() or self.paste_busy:
+            if automatic and text:
+                self.paste_queue.append(text)
             return
-        if not self.editor.toPlainText():
+        if not text:
             return
         if self.portal_permission_pending:
-            self.error("Finish the desktop permission request before pasting")
+            if automatic:
+                self.copy_fallback(text)
+            else:
+                self.error(S.PASTE_PERMISSION_PENDING)
             return
         if not self.paste_enabled:
-            self.error("Enable paste permission in Settings first, or choose Copy")
+            self.copy_fallback(text, S.COPIED_FALLBACK_NO_PERMISSION)
             return
-        self.clipboard.offer(self.editor.toPlainText())
+        offered = self.clipboard.offer(text)
+        if offered is False or getattr(self.clipboard, "mode", None) == "failed":
+            LOG.warning("clipboard offer failed; falling back to plain copy")
+            self.clipboard.restore()
+            self.copy_fallback(text)
+            return
         self.paste_busy = True
         self.paste_request_id = uuid.uuid4().hex
-        delay = 250 if automatic and not self.isActiveWindow() else 3000
-        self.set_status("กำลังวางข้อความ…" if delay == 250 else "สลับไปช่องข้อความปลายทาง จะวางให้ใน 3 วินาที")
+        delay = AUTOMATIC_PASTE_DELAY_MS if automatic and not self.isActiveWindow() else MANUAL_PASTE_DELAY_MS
         if self.isVisible():
             self.showMinimized()
         self.paste_timer.start(delay)
+        self.paste_deadline = time.monotonic() + delay / 1000
+        if delay == AUTOMATIC_PASTE_DELAY_MS:
+            self.set_status(S.PASTING)
+        else:
+            self.paste_countdown_tick()
+            self.paste_countdown.start()
+        self.refresh_state()
+
+    def paste_countdown_tick(self):
+        if not self.paste_timer.isActive():
+            self.paste_countdown.stop()
+            return
+        seconds = max(1, math.ceil(self.paste_deadline - time.monotonic()))
+        text = S.PASTE_COUNTDOWN.format(seconds=seconds)
+        if self.status.text() != text:
+            self.set_status(text)
 
     def send_paste(self):
         self.paste_timer.stop()
+        self.paste_countdown.stop()
         self.portal_command("paste")
+        self.refresh_state()
 
     def report_paste_failure(self, message):
         # A delayed paste failure must not hide a newer recording or ASR job.
+        LOG.info("paste outcome: failed")
         if self.recording or self.jobs.busy:
             return
         self.set_status(message)
@@ -940,10 +1324,12 @@ class MainWindow(QMainWindow):
         if self.paste_committed or self.paste_inflight:
             return
         self.paste_timer.stop()
+        self.paste_countdown.stop()
         self.paste_request_id = None
         self.paste_busy = False
         self.clipboard.restore()
         self.report_paste_failure(message)
+        self.refresh_state()
 
     def portal_command(self, action, **options):
         if action == "paste":
@@ -951,25 +1337,25 @@ class MainWindow(QMainWindow):
                 return
             reason = None
             if self.portal_permission_pending:
-                reason = "Paste cancelled while desktop permissions are being configured"
+                reason = S.PASTE_ABORT_PERMISSION_PENDING
             elif not self.paste_enabled:
-                reason = "Paste cancelled because desktop paste permission ended; the text remains in the editor"
+                reason = S.PASTE_ABORT_PERMISSION_ENDED
             elif not self.paste_busy:
-                reason = "Paste cancelled; the text remains in the editor"
+                reason = S.PASTE_CANCELLED
             elif not self.clipboard.owns_clipboard():
-                reason = "Paste cancelled because the clipboard changed"
+                reason = S.PASTE_ABORT_CLIPBOARD_CHANGED
             if reason:
                 self.abort_pending_paste(reason)
                 return
         if action in {"shortcuts", "enable_paste", "restore"}:
             if self.portal_permission_pending:
-                self.error("Finish the current desktop permission request first")
+                self.error(S.PERMISSION_PENDING)
                 return
             if self.paste_busy and not self.paste_timer.isActive():
-                self.error("Wait for the current paste to finish before configuring permissions")
+                self.error(S.PERMISSION_WAIT_PASTE)
                 return
             if self.paste_timer.isActive():
-                self.abort_pending_paste("Paste cancelled while desktop permissions are being configured")
+                self.abort_pending_paste(S.PASTE_ABORT_PERMISSION_PENDING)
             else:
                 self.clipboard.restore()
                 self.paste_busy = False
@@ -1010,11 +1396,11 @@ class MainWindow(QMainWindow):
                 self.show_shortcut_status()
             elif event == "paste_enabled":
                 self.paste_enabled = True
-                message = "อนุญาตวางข้อความแล้ว"
+                message = S.PASTE_ENABLED
                 if response.get("persistent"):
-                    message += " · ระบบจะจำสิทธิ์นี้ไว้เมื่อเปิดแอปครั้งถัดไป"
+                    message += S.PASTE_ENABLED_PERSISTENT
                 else:
-                    message += " สำหรับเซสชันนี้"
+                    message += S.PASTE_ENABLED_SESSION
                 self.set_status(message)
             elif event == "paste_sent":
                 request_id = response.get("request_id")
@@ -1025,16 +1411,20 @@ class MainWindow(QMainWindow):
                     self.clipboard.restore_later()
                     continue
                 self.clipboard.restore_later()
-                self.feedback.typing()
-                self.set_status("ส่งคำสั่งวางแล้ว ตรวจสอบแอปปลายทางได้เลย · ระบบจะคืน clipboard ให้ภายหลัง")
+                LOG.info("paste outcome: sent")
+                if not self.recording:
+                    pasted = getattr(self.feedback, "pasted", None)
+                    pasted() if callable(pasted) else self.feedback.typing()
+                    self.set_status(S.PASTE_SENT)
             elif event == "shortcuts_enabled":
-                self.portal_shortcut = response.get("trigger", "Configured by desktop")
+                trigger = response.get("trigger") or S.SHORTCUT_BY_DESKTOP
+                self.portal_shortcut = trigger
                 self.refresh_shortcut_status()
-                self.set_status("Global shortcut: " + response.get("trigger", "Configured by desktop"))
+                self.set_status(S.SHORTCUT_PORTAL.format(trigger=trigger))
             elif event == "shortcuts_disabled":
                 self.portal_shortcut = ""
                 self.refresh_shortcut_status()
-                self.set_status("No active global shortcut. Enable or configure one in Settings.")
+                self.set_status(S.SHORTCUT_NONE)
             elif event == "paste_disabled":
                 self.paste_enabled = False
             elif event == "error":
@@ -1054,17 +1444,19 @@ class MainWindow(QMainWindow):
                     self.report_paste_failure(response["error"])
                 else:
                     self.clipboard.restore()
-                    self.error(response["error"])
+                    self.error(response["error"], jump=response.get("action") == "shortcut")
             elif event == "warning":
                 self.set_status(response["error"])
             elif event == "command_finished":
                 self.portal_permission_pending = False
                 self.next_desktop_request()
             self.update_setup_view()
+            self.refresh_state()
 
     def portal_finished(self):
         paste_interrupted = bool(self.paste_request_id and (self.paste_inflight or self.paste_timer.isActive()))
         self.paste_timer.stop()
+        self.paste_countdown.stop()
         self.paste_request_id = None
         self.desktop_queue.clear()
         if self.startup_action:
@@ -1084,12 +1476,13 @@ class MainWindow(QMainWindow):
             self.clipboard.restore()
             self.paste_busy = False
         if paste_interrupted and not self.quitting:
-            self.report_paste_failure("Paste cancelled because the desktop connection closed; the text remains in the editor")
+            self.report_paste_failure(S.PASTE_ABORT_BRIDGE_CLOSED)
+        self.refresh_state()
 
     def portal_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
             self.portal_finished()
-            self.error("Desktop integration could not start. You can retry or use Copy.")
+            self.error(S.DESKTOP_START_FAILED)
 
     def selected_model(self):
         index = self.model_list.currentRow()
@@ -1101,20 +1494,25 @@ class MainWindow(QMainWindow):
         for key, spec in CATALOG.items():
             size = installed_size(key)
             size_text = f"{size / 1e9:.2f} GB" if size >= 1e9 else f"{size / 1e6:.0f} MB"
-            status = f"พร้อมใช้ · {size_text}" if size else "ยังไม่ได้ดาวน์โหลด"
+            status = S.MODEL_READY.format(size=size_text) if size else S.MODEL_NOT_DOWNLOADED
             tags = " · " + " · ".join(spec.tags) if spec.tags else ""
-            self.model_list.addItem(f"{spec.name}{tags}\n{status}" + (" · เลือกอยู่" if key == self.settings.model else ""))
+            self.model_list.addItem(f"{spec.name}{tags}\n{status}" + (S.MODEL_SELECTED if key == self.settings.model else ""))
         self.model_list.setCurrentRow(min(max(0, current), len(CATALOG) - 1))
+        self.refresh_models_page()
 
     def model_details(self, _index):
         spec = CATALOG[self.selected_model()]
         from .performance import measurements
         rates = measurements().get(spec.id, {})
         formats = {"typhoon": "NeMo · FastConformer", "qwen": "SafeTensors", "openvino": "OpenVINO IR · INT8", "fastflowlm": "Q4NX", "marian": "PyTorch + SentencePiece", "vulkan": "GGML · Q5"}
-        storage = (f"นำเข้าจากโฟลเดอร์ · ใช้พื้นที่ {installed_size(spec.id) / 1e9:.2f} GB"
-                   if spec.origin == "local" else f"ดาวน์โหลดประมาณ {spec.download_gb:.2f} GB")
-        self.model_description.setText(f"{storage} · หน่วยความจำประมาณ {spec.memory_gb} GB\nภาษา: {', '.join(spec.languages)}\nสิทธิ์การใช้งาน: {spec.license}")
-        self.model_technical.setText(f"{spec.repo}\nBackend: {spec.backend} · Devices: {' / '.join(spec.devices)}\nFormat: {formats[spec.backend]}\nStatus: {spec.status}\nRevision: {spec.revision[:12]}\nMeasured seconds per audio second: {rates or 'No measurements yet'}")
+        storage = (S.MODEL_STORAGE_LOCAL.format(size=installed_size(spec.id) / 1e9)
+                   if spec.origin == "local" else S.MODEL_STORAGE_DOWNLOAD.format(size=spec.download_gb))
+        self.model_description.setText(S.MODEL_DESCRIPTION.format(storage=storage, memory=spec.memory_gb,
+                                       languages=", ".join(spec.languages), license=spec.license))
+        self.model_technical.setText(S.MODEL_TECHNICAL.format(repo=spec.repo, backend=spec.backend,
+                                     devices=" / ".join(spec.devices), format=formats.get(spec.backend, spec.backend),
+                                     status=spec.status, revision=spec.revision[:12],
+                                     rates=rates or S.MODEL_NO_MEASUREMENTS))
         self.download_button.setEnabled(spec.origin != "local")
         self.model_beta_warning.setVisible(any(device in spec.devices for device in ("gpu", "npu")))
 
@@ -1122,9 +1520,9 @@ class MainWindow(QMainWindow):
         spec = CATALOG[self.settings.model]
         thai_only = spec.backend == "typhoon"
         self.language.setItemText(self.language.findData("auto"),
-                                  "อัตโนมัติ · ภาษาไทย" if thai_only else "อัตโนมัติ · ไทย + English")
+                                  S.LANGUAGE_AUTO_THAI if thai_only else S.LANGUAGE_AUTO_MIXED)
         self.language.setItemText(self.language.findData("English"),
-                                  "English · ต้องเลือกโมเดลอื่น" if thai_only else "English")
+                                  S.LANGUAGE_ENGLISH_OTHER_MODEL if thai_only else S.LANGUAGE_ENGLISH)
         self.language_hint.setVisible(thai_only)
         labels = {"openvino": "Intel GPU (OpenVINO)", "vulkan": "Hardware GPU (Vulkan)"}
         self.device.setItemText(self.device.findData("gpu"), labels.get(spec.backend, "GPU (CUDA)") + " · Beta")
@@ -1132,20 +1530,21 @@ class MainWindow(QMainWindow):
         enabled = (spec.backend == "openvino" and "NPU" in openvino_devices()) or (spec.backend == "fastflowlm" and available())
         item = self.device.model().item(self.device.findData("npu"))
         item.setEnabled(enabled)
-        item.setToolTip("Experimental NPU: test this model first and review its accuracy" if enabled else "Selected model and installed runtime have no available NPU. See Diagnostics.")
+        item.setToolTip(S.NPU_ENABLED_TOOLTIP if enabled else S.NPU_DISABLED_TOOLTIP)
         if not enabled and self.device.currentData() == "npu":
             self.device.setCurrentIndex(self.device.findData("auto"))
+        self.sync_device_choices_page()
 
     def download_model(self, _checked=False, *, model_id=None):
         if self.download_process:
             return
         model_id = model_id or self.selected_model()
         if CATALOG[model_id].origin == "local":
-            self.download_status.setText("โมเดลภายนอก: ใช้ปุ่มนำเข้าโมเดลจากโฟลเดอร์เพื่อนำเข้าอีกครั้ง")
+            self.download_status.setText(S.MODEL_EXTERNAL_REIMPORT)
             return
         if model_id in {self.settings.model, "translate-th-en"}:
             if self.recording or self.jobs.busy:
-                self.download_status.setText("Finish the current job before repairing its model")
+                self.download_status.setText(S.MODEL_BUSY_REPAIR)
                 return
             self.jobs.stop_worker()
         self.importing = False
@@ -1154,21 +1553,21 @@ class MainWindow(QMainWindow):
                 return
         self.downloading_model = model_id
         self.start_model_process(["-m", "phimthai.models", model_id])
-        self.download_status.setText(f"กำลังดาวน์โหลด {CATALOG[model_id].name} ประมาณ {CATALOG[model_id].download_gb:.2f} GB\nเริ่มต้นครั้งแรก ใช้เวลาตามความเร็วอินเทอร์เน็ต · ภายหลังลบหรือเปลี่ยนโมเดลได้")
+        self.download_status.setText(S.MODEL_DOWNLOADING.format(name=CATALOG[model_id].name, size=CATALOG[model_id].download_gb))
         self.update_setup_view()
 
     def import_model(self):
         if self.download_process or self.recording or self.jobs.busy:
-            self.download_status.setText("รอให้งานและการดาวน์โหลดเสร็จก่อนนำเข้าโมเดล")
+            self.download_status.setText(S.MODEL_IMPORT_BUSY)
             return
-        folder = QFileDialog.getExistingDirectory(self, "เลือกโฟลเดอร์ Qwen3-ASR หรือ Whisper OpenVINO / GGML Q5")
+        folder = QFileDialog.getExistingDirectory(self, S.MODEL_IMPORT_DIALOG)
         if not folder:
             return
         self.importing = True
         self.imported_model = None
         self.downloading_model = None
         self.start_model_process(["-m", "phimthai.models", "--import", folder])
-        self.download_status.setText("กำลังตรวจและคัดลอกโมเดลเข้าพื้นที่แอป · ไฟล์ต้นฉบับจะเก็บไว้เหมือนเดิม")
+        self.download_status.setText(S.MODEL_IMPORTING)
         self.update_setup_view()
 
     def start_model_process(self, arguments):
@@ -1204,9 +1603,9 @@ class MainWindow(QMainWindow):
             else:
                 self.download_progress.setRange(0, 100)
                 self.download_progress.setValue(int(event.get("completed", 0) / max(1, event.get("total", 1)) * 100))
-                self.download_status.setText("ตรวจไฟล์ครบ พร้อมใช้งาน" if event.get("done") else
-                    ("กำลังนำเข้า: " if event.get("importing") else "กำลังดาวน์โหลด: ") + event.get("file", "") +
-                    f" · ตรวจแล้ว {event.get('completed', 0) / 1e6:.0f} / {event.get('total', 0) / 1e6:.0f} MB")
+                self.download_status.setText(S.MODEL_VERIFIED if event.get("done") else
+                    (S.MODEL_PROGRESS_IMPORT if event.get("importing") else S.MODEL_PROGRESS_DOWNLOAD) + event.get("file", "") +
+                    S.MODEL_PROGRESS_SIZE.format(done=event.get("completed", 0) / 1e6, total=event.get("total", 0) / 1e6))
                 if event.get("model_id"):
                     self.imported_model = event["model_id"]
             self.update_setup_view()
@@ -1222,17 +1621,17 @@ class MainWindow(QMainWindow):
         process.deleteLater()
         self.download_progress.setRange(0, 100)
         if code:
-            self.download_status.setText("หยุดแล้ว · กดโหลดโมเดลต่อได้ " + self.download_failure)
+            self.download_status.setText(S.MODEL_STOPPED + self.download_failure)
         elif self.importing:
             refresh_catalog()
             self.jobs.stop_worker()
-            self.download_status.setText("นำเข้าแล้ว · เลือกโมเดลแล้วกดเลือกใช้ ไฟล์ต้นฉบับยังอยู่ครบ")
+            self.download_status.setText(S.MODEL_IMPORTED)
         if self.importing:
             from .external_models import cleanup_interrupted_import
             try:
                 cleanup_interrupted_import(self.model_process_pid)
             except OSError as exc:
-                self.download_failure = f"ล้างไฟล์นำเข้าชั่วคราวไม่สำเร็จ: {exc}"
+                self.download_failure = S.MODEL_IMPORT_CLEANUP_FAILED.format(error=exc)
                 self.download_status.setText(self.download_failure)
         if model_id == self.settings.model and self.settings.model_setup == "downloading" and (not self.quitting or not code):
             self.save_setup(model_setup="complete" if not code else "paused")
@@ -1250,7 +1649,7 @@ class MainWindow(QMainWindow):
             if self.settings.model_setup == "downloading":
                 self.save_setup(model_setup="paused")
             self.download_progress.setRange(0, 100)
-            self.download_status.setText("Could not start download worker. Select Download to retry.")
+            self.download_status.setText(S.MODEL_DOWNLOAD_START_FAILED)
             self.download_failure = self.download_status.text()
             self.update_setup_view()
 
@@ -1263,23 +1662,23 @@ class MainWindow(QMainWindow):
 
     def use_model(self):
         if self.recording or self.jobs.busy:
-            self.download_status.setText("Finish the current job before switching models")
+            self.download_status.setText(S.MODEL_BUSY_SWITCH)
             return
         model_id = self.selected_model()
         if model_id == self.downloading_model:
-            self.download_status.setText("Wait for this model download to finish")
+            self.download_status.setText(S.MODEL_WAIT_DOWNLOAD)
             return
         if CATALOG[model_id].kind != "asr":
-            self.download_status.setText("This translation model is used by Translate and the Thai to English profile")
+            self.download_status.setText(S.MODEL_TRANSLATION_ONLY)
             return
         if local_model(model_id) is None:
-            self.download_status.setText("Download this model first")
+            self.download_status.setText(S.MODEL_DOWNLOAD_FIRST)
             return
         selected = replace(self.settings, model=model_id)
         try:
             save_settings(selected)
         except OSError as exc:
-            self.download_status.setText(f"Could not save model selection: {exc}")
+            self.download_status.setText(S.MODEL_SELECT_SAVE_FAILED.format(error=exc))
             return
         self.settings = selected
         self.jobs.stop_worker()
@@ -1290,12 +1689,12 @@ class MainWindow(QMainWindow):
     def remove_model(self):
         model_id = self.selected_model()
         if self.jobs.busy or self.recording or self.download_process:
-            self.download_status.setText("Finish active jobs and downloads before removing a model")
+            self.download_status.setText(S.MODEL_BUSY_REMOVE)
             return
         if not model_dir(model_id).exists():
-            self.download_status.setText("This model belongs to the legacy installation. Its cache is preserved.")
+            self.download_status.setText(S.MODEL_LEGACY)
             return
-        if QMessageBox.question(self, "Remove model", "Remove downloaded files for this model? You can download them again.") == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, S.MODEL_REMOVE_TITLE, S.MODEL_REMOVE_QUESTION) == QMessageBox.StandardButton.Yes:
             self.jobs.stop_worker()
             if model_id == self.settings.model and CATALOG[model_id].origin == "local":
                 if not self.save_setup(model=DEFAULT_MODEL, device="auto", model_setup="skipped"):
@@ -1312,43 +1711,44 @@ class MainWindow(QMainWindow):
         state = inventory()
         from .fastflowlm_backend import available, runtime_path
         from .vulkan_backend import runtime_path as vulkan_runtime
-        state["amd_runtime"] = str(runtime_path() or "Not installed")
+        state["amd_runtime"] = str(runtime_path() or S.DIAG_NOT_INSTALLED)
         state["amd_runtime_and_device_available"] = available()
         state["vulkan_runtime_installed"] = vulkan_runtime() is not None
-        state["npu_note"] = "Patched AMD FastFlowLM passed initial ASR samples on Ryzen AI 5 340; experimental quality. Intel NPU needs hardware testing."
+        state["npu_note"] = S.DIAG_NPU_NOTE
         state["model"] = self.settings.model
         state["data_directory"] = str(data_dir())
         microphone_count = len(QMediaDevices.audioInputs())
         model_ready = local_model(self.settings.model) is not None
-        summary = [f"ไมโครโฟน / Microphones: {microphone_count}",
-                   "โมเดล / Model: " + ("Downloaded — ready for verification when used" if model_ready else "Choose and download a model in Models"),
-                   "CPU: available. Auto starts with CPU until comparable speed measurements exist."]
+        summary = [S.DIAG_MICROPHONES.format(count=microphone_count),
+                   S.DIAG_MODEL_READY if model_ready else S.DIAG_MODEL_MISSING,
+                   S.DIAG_CPU]
         if not microphone_count:
-            summary.append("Connect a microphone and allow microphone access in your system's application permissions.")
+            summary.append(S.DIAG_NO_MICROPHONE)
         if state["vulkan_runtime_installed"]:
-            summary.append("GPU: choose Whisper Turbo Vulkan in Models, then GPU in Settings. The result shows the device actually used.")
+            summary.append(S.DIAG_VULKAN)
         if available():
-            summary.append("AMD NPU: runtime and device found. Choose the AMD NPU model and NPU manually; speech quality is experimental.")
-        elif state["flatpak"]:
-            summary.append("NPU is unavailable in this sandbox. CPU works with the standard permissions. Experimental NPU setup needs compatible host drivers, runtime and device access.")
+            summary.append(S.DIAG_AMD_NPU)
+        elif state.get("flatpak"):
+            summary.append(S.DIAG_FLATPAK_NPU)
         else:
-            summary.append("NPU: install a compatible vendor runtime and host driver before testing. Hardware detection alone does not enable ASR.")
-        summary.append("ปุ่มลัดและวาง / Shortcut and paste: enable each in Settings and respond to your desktop's permission dialog.")
+            summary.append(S.DIAG_NPU_INSTALL)
+        summary.append(S.DIAG_SHORTCUT_PASTE)
         self.diagnostic_summary.setText("\n\n".join(summary))
         self.diagnostics.setPlainText(json.dumps(state, ensure_ascii=False, indent=2))
 
     def clear_history(self):
-        if QMessageBox.question(self, "Clear history", "Delete all text and audio history saved by this app?") == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, S.CLEAR_HISTORY_TITLE, S.CLEAR_HISTORY_QUESTION) == QMessageBox.StandardButton.Yes:
             try:
                 for directory in (data_dir() / "history", data_dir() / "audio-history"):
                     for file in directory.glob("*"):
                         if file.is_file():
                             file.unlink()
-                self.set_status("Saved text and audio history cleared")
+                self.set_status(S.STATUS_HISTORY_CLEARED)
             except OSError as exc:
-                self.error(f"Some saved history could not be removed: {exc}")
+                self.error(S.HISTORY_CLEAR_FAILED.format(error=exc))
 
     def closeEvent(self, event):
+        self.flush_pages()
         if self.tray and self.tray.isVisible() and not self.quitting:
             self.hide()
             event.ignore()
@@ -1356,12 +1756,12 @@ class MainWindow(QMainWindow):
         self.quitting = True
         self.cancel()
         if self.paste_committed:
-            self.set_status("กำลังจบการวางข้อความ รอสักครู่แล้วแอปจะปิดให้")
+            self.set_status(S.CLOSING_WAIT_PASTE)
             event.ignore()
             return
         if self.shortcut_process and self.shortcut_installing:
             # Let the desktop transaction finish or roll back before exiting.
-            self.set_status("กำลังตั้งปุ่มลัด รอสักครู่แล้วแอปจะปิดให้")
+            self.set_status(S.CLOSING_WAIT_SHORTCUT)
             event.ignore()
             return
         if self.shortcut_process:
@@ -1384,28 +1784,29 @@ class MainWindow(QMainWindow):
             QApplication.instance().quit()
 
     def setup_tray(self):
-        quit_action = QAction("ออกจาก PhimThaiMaiPen", self)
+        quit_action = QAction(S.MENU_QUIT, self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.quit)
         self.addAction(quit_action)
-        menu_bar = self.menuBar().addMenu("แอป")
-        clear_action = QAction("ล้างข้อความและเสียงชั่วคราว", self)
+        menu_bar = self.menuBar().addMenu(S.MENU_APP)
+        clear_action = QAction(S.MENU_CLEAR, self)
         clear_action.setShortcut("Ctrl+L")
         clear_action.triggered.connect(self.clear_current)
         menu_bar.addAction(clear_action)
         menu_bar.addAction(quit_action)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray = QSystemTrayIcon(self.app_icon, self)
-            self.tray.setToolTip("PhimThaiMaiPen · Voice typing")
+            self.tray.setToolTip(S.TRAY_IDLE)
             menu = QMenu(self)
-            menu.addAction("เปิด PhimThaiMaiPen", self.showNormal)
-            menu.addAction("เริ่ม / หยุดพูด", self.toggle_record)
-            menu.addAction("ยกเลิก", self.cancel)
+            menu.addAction(S.MENU_OPEN, self.showNormal)
+            menu.addAction(S.MENU_TOGGLE, self.toggle_record)
+            menu.addAction(S.MENU_CANCEL, self.cancel)
             menu.addSeparator()
             menu.addAction(quit_action)
             self.tray.setContextMenu(menu)
             self.tray.activated.connect(lambda reason: self.showNormal() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
+            self.update_tray_state()
 
     def clear_current(self):
         self.cancel()
@@ -1415,7 +1816,51 @@ class MainWindow(QMainWindow):
         for audio in Path(self.temp.name).iterdir():
             if audio.is_file():
                 audio.unlink(missing_ok=True)
-        self.set_status("Transcript and temporary audio cleared")
+        self.set_status(S.STATUS_CLEARED)
+
+    def diagnostic_extra(self):
+        """Non-private state for the problem report (never transcript text)."""
+        return {
+            "state": self.state.value,
+            "shortcut": self.shortcut_hint.text(),
+            "mode_shortcut": self.mode_shortcut_hint.text(),
+            "kde_shortcut_active": bool(self.kde_shortcut_state.get("active")),
+            "portal_shortcut": self.portal_shortcut or "",
+            "paste_enabled": self.paste_enabled,
+            "paste_mode": self.settings.paste_mode,
+            "model": self.settings.model,
+            "model_installed": local_model(self.settings.model) is not None,
+            "device": self.settings.device,
+            "warm": self.jobs_warm(),
+            "popup_error": getattr(self.feedback, "popup_error", ""),
+        }
+
+    def copy_diagnostic_report(self):
+        extra = self.diagnostic_extra()
+        try:
+            from . import logs
+            report = logs.diagnostic_report(extra=extra)
+        except Exception as exc:  # logs module missing or failing: still give something useful.
+            LOG.warning("diagnostic report fallback: %s", exc)
+            report = "PhimThaiMaiPen diagnostic report\nversion: " + __version__ + "\n" + "\n".join(
+                f"{key}: {value}" for key, value in extra.items())
+            if hasattr(self, "diagnostics"):
+                report += "\n\n" + self.diagnostics.toPlainText()
+        QGuiApplication.clipboard().setText(report)
+        self.set_status(S.STATUS_REPORT_COPIED)
+        return report
+
+    def status_report(self):
+        """JSON for ``--status``; keep existing keys, scripts depend on them."""
+        return {"running": True, "pid": os.getpid(),
+                "version": __version__, "recording": self.recording,
+                "busy": self.jobs.busy, "transcript_characters": len(self.editor.toPlainText()),
+                "shortcut": self.shortcut_hint.text(), "mode_shortcut": self.mode_shortcut_hint.text(),
+                "profile": self.settings.profile, "visible": self.isVisible(),
+                "paste_mode": self.settings.paste_mode, "paste_enabled": self.paste_enabled,
+                "permission_pending": self.portal_permission_pending,
+                "popup": self.feedback.last_report, "popup_error": self.feedback.popup_error,
+                "status": self.status.text(), "state": self.state.value}
 
 
 def single_instance(app):
@@ -1446,7 +1891,22 @@ def single_instance(app):
     return server
 
 
+def setup_logging():
+    try:
+        from . import logs
+    except ImportError:
+        return
+    setup = getattr(logs, "setup_logging", None)
+    if callable(setup):
+        try:
+            setup()
+        except Exception as exc:  # Logging must never prevent the app from starting.
+            print(f"PhimThaiMaiPen: logging unavailable: {exc}", file=sys.stderr)
+
+
 def main():
+    if "--status" not in sys.argv:
+        setup_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("PhimThaiMaiPen")
     app.setOrganizationName("PhimThaiMaiPen")
@@ -1482,15 +1942,7 @@ def main():
                 window.raise_()
                 window.activateWindow()
             elif command == b"status":
-                socket.write((json.dumps({"running": True, "pid": os.getpid(),
-                    "version": __version__, "recording": window.recording,
-                    "busy": window.jobs.busy, "transcript_characters": len(window.editor.toPlainText()),
-                    "shortcut": window.shortcut_hint.text(), "mode_shortcut": window.mode_shortcut_hint.text(),
-                    "profile": window.profile.currentData(), "visible": window.isVisible(),
-                    "paste_mode": window.paste_mode.currentData(), "paste_enabled": window.paste_enabled,
-                    "permission_pending": window.portal_permission_pending,
-                    "popup": window.feedback.last_report, "popup_error": window.feedback.popup_error,
-                    "status": window.status.text()}) + "\n").encode())
+                socket.write((json.dumps(window.status_report()) + "\n").encode())
                 socket.flush()
             socket.disconnectFromServer()
             socket.deleteLater()

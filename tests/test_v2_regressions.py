@@ -119,6 +119,7 @@ class JobSettingsRegressionTests(IsolatedSettingsTest):
     def setUp(self):
         super().setUp()
         self.jobs = JobController(worker_module="tests.echo_worker", temp_root=self.root)
+        self.jobs.idle_timeout_ms = 0  # these tests assert release once idle
         self.addCleanup(self.jobs.cancel)
         self.results, self.errors = [], []
         self.jobs.result.connect(self.results.append)

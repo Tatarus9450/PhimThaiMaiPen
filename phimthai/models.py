@@ -53,6 +53,7 @@ CATALOG = {
                            files=("ggml-large-v3-turbo-q5_0.bin",), status="Experimental; requires packaged whisper.cpp runtime"),
 }
 VERIFIED = {}
+STAT_FILE = "verified.stat"  # not a model suffix, so folder imports skip it
 BUILTIN_CATALOG = dict(CATALOG)
 
 
@@ -101,11 +102,32 @@ def check_files(directory, files, verify, backend="qwen"):
         stat = path.stat()
         signature.append((name, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino, expected))
     if verify and VERIFIED.get(str(directory)) != signature:
-        for name, metadata in files.items():
-            if digest(directory / name) != metadata["sha256"]:
-                return False
+        if load_signature(directory) != signature:
+            for name, metadata in files.items():
+                if digest(directory / name) != metadata["sha256"]:
+                    return False
+            save_signature(directory, signature)
         VERIFIED[str(directory)] = signature
     return True
+
+
+def load_signature(directory):
+    # Any rewrite changes ctime (not settable by users), so a matching stat
+    # signature means the bytes hashed by an earlier process are unchanged.
+    try:
+        data = json.loads((directory / STAT_FILE).read_text())
+        return [tuple(item) for item in data["files"]] if data.get("version") == 1 else None
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def save_signature(directory, signature):
+    pending = directory / (STAT_FILE + ".tmp")
+    try:
+        pending.write_text(json.dumps({"version": 1, "files": signature}))
+        pending.replace(directory / STAT_FILE)
+    except OSError:
+        pending.unlink(missing_ok=True)
 
 
 def model_dir(model_id):

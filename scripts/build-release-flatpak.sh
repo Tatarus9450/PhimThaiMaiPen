@@ -298,7 +298,7 @@ flatpak build --runtime --readonly --unshare=network \
     --env=HF_HUB_OFFLINE=1 --env=TRANSFORMERS_OFFLINE=1 \
     "$work/build" python3 -c '
 import importlib.metadata as metadata, json, pathlib
-import torch, PySide6
+import shutil, torch, PySide6
 from nemo.collections.asr.models import ASRModel
 from qwen_asr import Qwen3ASRModel
 from transformers import MarianMTModel, MarianTokenizer
@@ -315,6 +315,7 @@ from phimthai.devices import select_device
 assert select_device("auto", torch) == ("cpu", "")
 assert torch.__version__ == "2.11.0+cpu" and torch.version.cuda is None
 assert PySide6.__version__ == "6.11.1"
+assert shutil.which("wl-copy") == "/app/bin/wl-copy" and shutil.which("wl-paste") == "/app/bin/wl-paste"
 assets = pathlib.Path(phimthai.app.__file__).parent / "assets"
 assert all((assets / ("feedback-" + name + ".wav")).is_file() for name in ("start", "stop", "mode", "ready"))
 application = QApplication([])

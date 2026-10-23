@@ -30,6 +30,7 @@ def until(predicate, timeout=10):
 class LifecycleTests(unittest.TestCase):
     def setUp(self):
         self.jobs = JobController(worker_module="tests.echo_worker")
+        self.jobs.idle_timeout_ms = 0  # these tests assert release once idle
         self.results, self.errors = [], []
         self.jobs.result.connect(self.results.append)
         self.jobs.failed.connect(self.errors.append)

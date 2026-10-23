@@ -14,7 +14,7 @@
     <p>Turn Thai and English speech into editable text on your Linux desktop. Record with your microphone or open an audio file, then paste automatically after granting desktop permission, or review and copy the result.</p>
     <p>On the first launch of a new installation, the app downloads Typhoon ASR Realtime separately, approximately 462 MB. Pause and resume the download in the app. Qwen models are optional downloads for English and mixed-language speech. Once the required models are installed, speech processing runs locally. Text and audio history are off by default.</p>
     <p>New installations use Typhoon ASR Realtime with Smart Mix, automatic CPU selection and immediate paste. The app prepares recording and mode shortcuts and requests desktop consent for keyboard access. Existing user settings are preserved.</p>
-    <p>A penguin holding a microphone identifies the app, with a cobalt, amber and ivory glass interface. The icon contains no text.</p>
+    <p>A penguin holding a microphone identifies the app. The interface follows light and dark mode with readable Thai typography. The icon contains no text.</p>
     <ul>
       <li>Edit, copy, retry, and translate Thai text into English</li>
       <li>Select your microphone and test its input level</li>
@@ -28,6 +28,21 @@
   <url type="vcs-browser">https://github.com/Tatarus9450/PhimThaiMaiPen</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0~beta6" date="2026-10-24" type="development">
+      <description>
+        <p>Faster, more reliable dictation and a redesigned interface:</p>
+        <ul>
+          <li>The speech model stays loaded between dictations and is released after 5 idle minutes; it also starts loading while you speak</li>
+          <li>Downloaded models are integrity-checked, processing timeouts scale with audio length, and damaged settings are repaired with a backup</li>
+          <li>Paste works across Wayland apps through wl-copy, or copies the text and tells you when paste is unavailable</li>
+          <li>Duplicate Meta+H registrations are detected and cleaned up, and repeated key presses are debounced</li>
+          <li>The dictation popup shows preparing, input level, pasted, copied, queued and error states; you can record again while earlier speech is processed</li>
+          <li>Rotating log file and a copy problem report action for troubleshooting</li>
+          <li>Thai-first messages, new model cards, autosaving grouped settings with a shortcut recorder, a diagnostics checklist and a first-run wizard</li>
+          <li>Dark mode, better Thai typography, WCAG AA contrast and visible keyboard focus</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.0.0~beta5" date="2026-10-07" type="development">
       <description>
         <p>Fixes startup crashes in Flatpak caused by mixed Qt platform plugins and stale singleton locks after a crash.</p>

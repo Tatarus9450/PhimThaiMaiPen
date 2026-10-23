@@ -36,6 +36,9 @@ class KDETests(unittest.IsolatedAsyncioTestCase):
         programs = patch.object(kde.shutil, "which", return_value=None)
         programs.start()
         self.addCleanup(programs.stop)
+        exports = patch.object(kde, "SYSTEM_FLATPAK_EXPORTS", self.root / "system-flatpak")
+        exports.start()
+        self.addCleanup(exports.stop)
 
     async def call(self, bus, member, signature="", body=None, path=kde.PATH, interface=kde.INTERFACE):
         body = body or []
@@ -100,7 +103,8 @@ class KDETests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("--toggle", desktop)
         self.assertNotIn("NoDisplay=true", desktop)
         unregistered = [tuple(body) for method, body in self.calls if method == "unregister"]
-        self.assertEqual(set(unregistered), {(kde.APP_ID, "record"), *((name, "_launch") for name in kde.LEGACY)})
+        self.assertEqual(set(unregistered), {(kde.APP_ID, "record"), (kde.APP_ID, "cycle-mode"),
+                                             *((name, "_launch") for name in kde.LEGACY)})
 
     async def test_external_owner_conflict_changes_nothing(self):
         self.owners = [["Action", "External action", "some.other.app", "Other app"]]
@@ -109,7 +113,7 @@ class KDETests(unittest.IsolatedAsyncioTestCase):
             await kde._install(None, "Meta+H", self.launcher)
         self.assertEqual(before, self.bindings)
         self.assertFalse((self.root / "data/phimthai/backups").exists())
-        self.assertEqual([method for method, _ in self.calls], ["shortcut", "getGlobalShortcutsByKey"])
+        self.assertEqual([method for method, _ in self.calls], ["shortcut", "shortcut", "getComponent", "isActive", "shortcut", "getGlobalShortcutsByKey"])
 
     async def test_rejected_registration_restores_dormant_portal_and_desktop(self):
         desktop = self.root / "data/applications" / kde.COMPONENT
@@ -187,6 +191,65 @@ class KDETests(unittest.IsolatedAsyncioTestCase):
             await kde._install(None, "Meta+H", self.launcher)
         self.assertEqual(self.bindings[(kde.APP_ID, "record")], [self.key])
         self.assertFalse(any(method in {"unregister", "cleanUp", "setShortcut"} for method, _ in self.calls))
+
+    async def test_live_portal_binding_blocks_duplicate_native_install(self):
+        self.present[kde.APP_ID] = True
+        before = self.bindings.copy()
+        with self.assertRaisesRegex(RuntimeError, "Meta\\+H.*portal"):
+            await kde._install(None, "Meta+H", self.launcher)
+        self.assertEqual(before, self.bindings)
+        self.assertFalse((self.root / "data/phimthai/backups").exists())
+
+    async def test_installed_flatpak_blocks_native_install_even_when_not_running(self):
+        export = self.root / "system-flatpak" / kde.COMPONENT
+        export.parent.mkdir(parents=True)
+        export.write_text("[Desktop Entry]\n")
+        self.bindings[(kde.APP_ID, "cycle-mode")] = [kde._key("Meta+Shift+H")[0]]
+        with self.assertRaisesRegex(RuntimeError, "Meta\\+Shift\\+H"):
+            await kde._install(None, "Ctrl+Alt+F9", self.launcher)
+        self.assertFalse(any(method in {"unregister", "cleanUp", "setShortcut"} for method, _ in self.calls))
+
+    async def test_remove_service_shortcuts_keeps_portal_and_backs_up(self):
+        mode = kde._key("Meta+Shift+H")[0]
+        self.bindings.update({(kde.COMPONENT, "Record"): [self.key], (kde.COMPONENT, "CycleMode"): [mode],
+                              (kde.APP_ID, "cycle-mode"): [mode]})
+        self.present.update({kde.COMPONENT: True, kde.APP_ID: True})
+        service = self.root / "data/kglobalaccel" / kde.COMPONENT
+        service.parent.mkdir(parents=True)
+        service.write_text("service copy\n")
+        config = self.root / "config/kglobalshortcutsrc"
+        config.parent.mkdir()
+        config.write_text("[services][%s]\nRecord=Meta+H\n" % kde.COMPONENT)
+        result = await kde._remove_services(None)
+        self.assertEqual({(item["action"], item["trigger"]) for item in result["removed"]},
+                         {("Record", "Meta+H"), ("CycleMode", "Meta+Shift+H")})
+        self.assertNotIn((kde.COMPONENT, "Record"), self.bindings)
+        self.assertNotIn((kde.COMPONENT, "CycleMode"), self.bindings)
+        self.assertEqual(self.bindings[(kde.APP_ID, "record")], [self.key])
+        self.assertEqual(self.bindings[(kde.APP_ID, "cycle-mode")], [mode])
+        self.assertEqual(self.bindings[("unrelated", "Keep")], [123456])
+        self.assertFalse(service.exists())
+        unregistered = {tuple(body) for method, body in self.calls if method == "unregister"}
+        self.assertFalse(any(component == kde.APP_ID for component, _ in unregistered))
+        saved = json.loads((Path(result["backup"]) / "manifest.json").read_text())
+        self.assertEqual({Path(item["path"]).name for item in saved["files"]}, {kde.COMPONENT, "kglobalshortcutsrc"})
+
+    async def test_remove_service_shortcuts_rolls_back_when_kde_keeps_them(self):
+        self.bindings[(kde.COMPONENT, "Record")] = [self.key]
+        self.present[kde.COMPONENT] = True
+        service = self.root / "data/kglobalaccel" / kde.COMPONENT
+        service.parent.mkdir(parents=True)
+        service.write_text("service copy\n")
+        original_call = self.call
+        async def stubborn(bus, member, signature="", body=None, **kwargs):
+            if member == "unregister":
+                self.calls.append((member, body))
+                return [False]
+            return await original_call(bus, member, signature, body, **kwargs)
+        with patch.object(kde, "_call", stubborn), self.assertRaisesRegex(RuntimeError, "kept service shortcuts"):
+            await kde._remove_services(None)
+        self.assertEqual(self.bindings[(kde.COMPONENT, "Record")], [self.key])
+        self.assertEqual(service.read_text(), "service copy\n")
 
 
 class KDEUnavailableTests(unittest.TestCase):

@@ -90,7 +90,7 @@ class FeedbackOverlayTests(unittest.TestCase):
             self.assertTrue(processing["visible"])
             self.assertFalse(processing["focused"])
             self.assertEqual((processing["x"], processing["width"], processing["height"]),
-                             (32, 200, 52))
+                             (32, 240, 52))
             helper.send("idle", "RAW")
             canceled = helper.read()
             self.assert_hidden(canceled)

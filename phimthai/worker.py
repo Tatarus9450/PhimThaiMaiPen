@@ -13,6 +13,8 @@ from .settings import DEFAULT_MODEL, Settings, data_dir
 
 
 def run(request):
+    if request["action"] == "warmup":
+        return warmup(request)
     if request["action"] != "transcribe":
         return run_inference(request)
     from .speech import prepare_speech
@@ -23,6 +25,31 @@ def run(request):
         result = run_inference(dict(request, audio=str(path)))
         result.update(metadata)
         return result
+
+
+def configure_service(service, settings, spec, path):
+    service.CONFIG.update({"TYPHOON_MODEL": str(path), "TYPHOON_ASR_BACKEND": spec.backend,
+                           "TYPHOON_ASR_LANGUAGE": settings.language,
+                           "TYPHOON_CPU_THREADS": str(settings.cpu_threads),
+                           "TYPHOON_HF_HOME": str(data_dir() / "cache/huggingface")})
+
+
+def warmup(request):
+    """Load (and warm) the in-process model so the next transcription skips startup."""
+    settings = Settings(**request["settings"]).validate()
+    spec = CATALOG[settings.model]
+    if spec.backend not in {"typhoon", "qwen"} or (spec.backend == "typhoon" and settings.language == "English"):
+        return {"ok": True, "warmup": True, "loaded": False}
+    path = local_model(settings.model, verify=True)
+    if path is None:
+        raise RuntimeError("Model missing or integrity check failed. Download or repair it in Models.")
+    import typhoon_service as service
+    configure_service(service, settings, spec, path)
+    service.import_runtime_modules()
+    device, _ = select_device(settings.device, service.TORCH, settings.model, settings.preference)
+    service.CONFIG["TYPHOON_DEVICE"] = device
+    service.load_model()
+    return {"ok": True, "warmup": True, "loaded": True, "device": service.DEVICE}
 
 
 def run_inference(request):
@@ -40,10 +67,7 @@ def run_inference(request):
         translation_path = local_model("translate-th-en", verify=True)
         if translation_path is None:
             raise RuntimeError("Download Thai → English translation in Models first")
-    service.CONFIG.update({"TYPHOON_MODEL": str(path), "TYPHOON_ASR_BACKEND": spec.backend,
-                           "TYPHOON_ASR_LANGUAGE": settings.language,
-                           "TYPHOON_CPU_THREADS": str(settings.cpu_threads),
-                           "TYPHOON_HF_HOME": str(data_dir() / "cache/huggingface")})
+    configure_service(service, settings, spec, path)
     if translation_path:
         service.CONFIG["TYPHOON_TRANSLATE_MODEL"] = str(translation_path)
     service.CONFIG["TYPHOON_REPLACEMENTS_TEXT"] = settings.dictionary

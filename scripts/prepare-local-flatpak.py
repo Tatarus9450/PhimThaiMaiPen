@@ -34,6 +34,9 @@ with tarfile.open(source, "w:gz") as archive:
 manifest = {
     "app-id": APP_ID, "runtime": "org.kde.Platform", "runtime-version": "6.11", "sdk": "org.kde.Sdk",
     "branch": "beta",
+    # x11 stays even on Wayland: the dictation HUD is an XCB/XWayland window so
+    # it can be positioned and never take focus (Wayland gives no such control
+    # without layer-shell). The main window still uses the Wayland socket.
     "command": "phimthai", "finish-args": ["--socket=wayland", "--socket=x11", "--share=ipc",
         "--socket=pulseaudio", "--share=network", "--device=dri", "--env=QT_AUDIO_BACKEND=pulseaudio",
         # Keep Qt plugins from the same source-built PySide stack as QtCore.
@@ -87,6 +90,10 @@ if args.source_pyside:
             "cp -a lib/python3.13/site-packages/PySide6 lib/python3.13/site-packages/shiboken6 lib/python3.13/site-packages/pyside6-6.11.1.dist-info lib/python3.13/site-packages/shiboken6-6.11.1.dist-info /app/lib/python3.13/site-packages/",
             "cp -a lib/libpyside6*.so* lib/libshiboken6*.so* /app/lib/"],
         "sources": [{"type": "dir", "path": "pyside-source-proof/build/files"}]})
+# wl-copy (/app/bin, on the sandbox PATH) backs the Wayland cross-app paste
+# fallback via the wlr/ext data-control protocol. Built from a pinned release.
+app_index = next(i for i, module in enumerate(manifest["modules"]) if module["name"] == "phimthai-preview")
+manifest["modules"].insert(app_index, json.loads((ROOT / "packaging/wl-clipboard.json").read_text()))
 npu_runtime = cache / "npu-sdk-proof/runtime"
 if args.experimental_accelerators and (npu_runtime / "flm-real").is_file():
     marker = {"version": "1.0.5", "profile": "phimthai-language-prefix-and-timestamp-fix",

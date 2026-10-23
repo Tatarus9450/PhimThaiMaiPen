@@ -265,8 +265,8 @@ class DefaultsAndBetaTests(IsolatedWindow, unittest.TestCase):
             self.assertIn("Beta", self.window.device.itemText(self.window.device.findData(device)))
         self.assertIn("ฟีเจอร์นี้อยู่ในขั้นตอนพัฒนา หากเปิดแล้วจะมีผลลัพธ์ไม่แน่นอน", self.window.beta_warning.text())
         self.assertEqual(self.window.beta_warning.objectName(), "betaWarning")
-        from phimthai.appearance import _STYLESHEET
-        self.assertIn("QLabel#betaWarning { color: #9b2c39", _STYLESHEET)
+        from phimthai.appearance import build_stylesheet
+        self.assertIn("QLabel#betaWarning { color: #9b2c39", build_stylesheet("light"))
 
     def test_partial_shortcuts_changed_preserves_other_binding(self):
         client = portals.Portals()

@@ -149,7 +149,7 @@ class PortalPasteKeycodeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_permission_never_sends_keyboard_events(self):
         self.client.remote = None
-        with self.assertRaisesRegex(RuntimeError, "Enable paste permission"):
+        with self.assertRaisesRegex(RuntimeError, "ยังไม่ได้อนุญาตวางอัตโนมัติ"):
             await self.client.paste()
         self.client.bus.call.assert_not_awaited()
         self.events.assert_not_called()
@@ -189,7 +189,7 @@ class PortalPasteKeycodeTests(unittest.IsolatedAsyncioTestCase):
                         return self.success
 
                     self.client.bus.call.side_effect = response
-                    with self.assertRaisesRegex(RuntimeError, "Keyboard release failed"):
+                    with self.assertRaisesRegex(RuntimeError, "ปล่อยปุ่ม Ctrl/V ไม่สำเร็จ"):
                         await self.client.paste()
                     self.assertEqual(self.sent_keys(), [(29, 1), (47, 1), (47, 0), (29, 0)])
                     self.events.assert_not_called()

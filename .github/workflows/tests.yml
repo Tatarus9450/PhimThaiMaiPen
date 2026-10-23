@@ -24,7 +24,7 @@ jobs:
       - name: Install GUI libraries
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libegl1 libopengl0 libgl1 libxkbcommon0 libxcb-cursor0 libpulse0 desktop-file-utils python3-gi ffmpeg patch pulseaudio-utils
+          sudo apt-get install --no-install-recommends -y libegl1 libopengl0 libgl1 libxkbcommon0 libxcb-cursor0 libpulse0 desktop-file-utils appstream python3-gi ffmpeg patch pulseaudio-utils
       - name: Install application test dependencies
         run: python scripts/install-app.py --python "$(command -v python)" --no-launcher
       - name: Check application and legacy regressions
@@ -33,3 +33,8 @@ jobs:
           .venv-app/bin/python -m unittest test_asr_backend -v
           .venv-app/bin/python -m compileall -q phimthai scripts tests
           desktop-file-validate phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.desktop
+          appstreamcli validate --no-net phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.metainfo.xml
+      - name: Run pytest collection (tests/ and test_asr_backend.py)
+        run: |
+          .venv-app/bin/python -m pip install "pytest>=8,<10"
+          .venv-app/bin/python -m pytest -q -rs tests test_asr_backend.py

@@ -1,25 +1,42 @@
 # Flatpak beta distribution
 
-Current source (2026-09-22) changes the default to Typhoon ASR Realtime and keeps Qwen as optional model downloads. Native installation includes NeMo 3.0.0 and matching CPU Torchaudio. The local Flatpak requirements, beta dependency pins and import gate include this runtime. The beta builder also adds a checksum-pinned ANTLR source-wheel step for NeMo's Hydra dependency and Python 3.13 audio compatibility packages. Only shell syntax and dependency-pin consistency have been checked: a new Flatpak bundle has not been built or validated for this change, and the retained packaged ASR accuracy smoke explicitly tests optional Qwen. The published beta 3 bundle described below still uses Qwen. The unfinished Flathub source-build recipe also needs NeMo and its dependency sources before release.
+Updated 2026-10-23 for `2.0.0b6` (tag `v2.0.0-beta.6`). Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, x86_64, KDE Platform/SDK 6.11. Betas are published as GitHub pre-releases after the CI build, offline ASR smoke and bundle import checks pass. The app is **not on Flathub yet**; Discover can install a downloaded bundle but cannot find it by search.
 
-Updated 2026-09-12. **Beta 3 is published after successful CI build, offline ASR and bundle import checks.** Application ID `io.github.tatarus9450.PhimThaiMaiPen`, branch `beta`, architecture x86_64, KDE Platform/SDK 6.11. The application version is `2.0.0b3`; Git tag `v2.0.0-beta.3`. Delivery uses a versioned GitHub source release and a downloadable Flatpak beta. This direct-download preview is **not published on Flathub**. Discover can install a downloaded bundle; searching Flathub for the application will not find it yet
+New installations default to Typhoon ASR Realtime (~462 MB, downloaded on first run); Qwen3-ASR models are optional downloads. The bundle includes wl-clipboard (`wl-copy`/`wl-paste` in `/app/bin`) for the Wayland paste fallback. Historical beta 3 publication evidence: [github-beta3-release.json](evidence/github-beta3-release.json).
 
-Beta 3 introduces a generated, text-free [penguin microphone icon](../phimthai/assets/io.github.tatarus9450.PhimThaiMaiPen.png) and a cobalt, amber and ivory glass interface. Native and Flatpak packages install the 512×512 PNG under the same application ID. The first-launch download, desktop consent flow and CPU default continue unchanged
+## Recommended distribution channels
 
-Public beta 3 verification: all eight published assets downloaded and matched their API sizes and hashes; the 406,518,232-byte bundle passed `SHA256SUMS`. Source tag and build commit are `f4403066500f14fd9959eb5a745be5b2277402df`. See [release evidence](evidence/github-beta3-release.json).
+| Channel | Recommendation | Why |
+| --- | --- | --- |
+| **Flatpak (Flathub)** | **Primary** | Works on Fedora, KDE neon, Ubuntu and others; sandboxed app ID gives proper portal identity for GlobalShortcuts and RemoteDesktop; Discover/GNOME Software integration and automatic updates once on Flathub |
+| Native installer (`scripts/install-app.py`) | Developers only | Editable checkout, CUDA/ROCm experiments, direct KDE shortcut binding; no auto-update |
+| Fedora COPR RPM | Optional, later | For GPU/NPU power users who need host drivers and system Python stacks; not before the Flatpak is stable |
+| Snap | Not recommended | Fedora does not ship snapd; KDE portal integration and GlobalShortcuts support for snaps is less mature; squashfs mount adds startup cost to an app whose value is fast dictation |
+| AppImage / standalone binary | Not recommended as primary | 2+ GB with PyTorch; FUSE 2 is absent on Fedora 44 by default; no built-in update channel; unsandboxed apps have no app ID, so the GlobalShortcuts/RemoteDesktop portals identify and remember them poorly |
+
+Do not install more than one copy. A user and a system Flatpak (or Flatpak plus native) register the same Meta+H shortcut twice. Check with `flatpak list --app | grep -i phimthai` and remove the extra one, for example `flatpak uninstall --system io.github.tatarus9450.PhimThaiMaiPen`.
+
+## Roadmap
+
+1. **Auto-updates:** move from downloadable `.flatpak` bundles to Flathub, or in the meantime an OSTree repo with a `.flatpakrepo`/`.flatpakref`, so `flatpak update` and Discover deliver new betas.
+2. **Smaller install:** split optional backends (Qwen runtime, Whisper Vulkan, OpenVINO) into Flatpak extensions so the default Typhoon install shrinks from ~2.7 GB.
+3. **Drop the X11 socket:** replace the XCB/XWayland dictation popup with a LayerShellQt overlay, then remove `--socket=x11`.
+4. Finish the Flathub source-build closure (see below).
 
 ## Install, update and rollback
 
-Download the `.flatpak` and `SHA256SUMS` from [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases/tag/v2.0.0-beta.3). Verify with `sha256sum --check --ignore-missing SHA256SUMS`, then open the bundle in Discover or run:
+Download `PhimThaiMaiPen-<version>-x86_64.flatpak` and `SHA256SUMS` from the newest pre-release on [GitHub Releases](https://github.com/Tatarus9450/PhimThaiMaiPen/releases). Verify with `sha256sum --check --ignore-missing SHA256SUMS`, then open the bundle in Discover or run:
 
 ```bash
-flatpak install --user ./PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak
+flatpak install --user ./PhimThaiMaiPen-*-x86_64.flatpak
 flatpak run --branch=beta io.github.tatarus9450.PhimThaiMaiPen
 ```
 
-The bundle points to Flathub for the KDE runtime. Runtime dependencies and models download separately. New installations use Qwen3-ASR 0.6B, automatic language selection, Smart Mix, Auto processing on CPU and immediate paste after desktop permission is granted. Qwen's pinned model revision is `5eb144179a02acc5e5ba31e748d22b0cf3e303b0` (~1.89 GB). Allow sufficient RAM for the desktop in addition to the historical measured 5.3–6 GB ASR peak. Model selection remains available; upgrades preserve existing model, paste and permission settings
+The bundle points to Flathub for the KDE runtime. Models download separately into the app's data directory. New installations use Typhoon ASR Realtime, Smart Mix, Auto processing on CPU and immediate paste after desktop permission is granted. Optional Qwen3-ASR 0.6B (pinned revision `5eb144179a02acc5e5ba31e748d22b0cf3e303b0`, ~1.89 GB) needs roughly 5.3–6 GB RAM at peak on CPU. Upgrades preserve existing model, paste and permission settings
 
-On the first interactive launch of a new installation, the app starts downloading Qwen 0.6B and shows progress. Use **หยุดดาวน์โหลด** to pause and **โหลดโมเดลต่อ** to resume. It also prepares Meta+H for recording and Meta+Shift+H for mode switching and requests desktop keyboard permission for paste. The user must respond to the actual desktop consent dialogs; readiness follows granted sessions and active bindings. Test the microphone in Settings when the model is ready. Review-before-paste remains available as a setting. XWayland is needed for the small left-side popup on Wayland
+The first-run wizard downloads Typhoon (pause/resume supported), selects the microphone and prepares Meta+H (record) and Meta+Shift+H (mode). The user must answer the real desktop consent dialogs for GlobalShortcuts and RemoteDesktop. The ASR worker stays loaded between dictations and is released after 5 idle minutes. XWayland is needed for the left-side popup on Wayland
+
+Logs: `~/.var/app/io.github.tatarus9450.PhimThaiMaiPen/.local/state/phimthai/logs/phimthai.log` (Flatpak maps `XDG_STATE_HOME` to `~/.var/app/<app-id>/.local/state` since Flatpak 1.13)
 
 Existing installations are not treated as first launches: upgrades do not change paste mode, redownload a model the user removed, or repeat initial permission setup automatically. Remembered sessions may still be restored and the desktop may ask for consent again. Denied or unsupported permissions leave editing and manual copy available; retry from Settings
 
@@ -31,7 +48,7 @@ When migrating from the native KDE installation, quit the native app and release
 
 ## Local integration package
 
-`scripts/build-release-flatpak.sh` resolves wheels inside the KDE SDK, builds, exports and smoke-tests the beta bundle. GitHub Actions calls the same helper for release tags and attaches the bundle, SHA256 checksums, dependency provenance and verification output. `scripts/prepare-local-flatpak.py` prepares the offline manifest under `.cache/`. It includes wheel dependencies, source-built MIT Kerberos, source-patched Qt Multimedia and the same minimal Qwen source patch used by the native installer. This recipe is for direct GitHub distribution, not the final Flathub source recipe
+`scripts/build-release-flatpak.sh` resolves wheels inside the KDE SDK, builds, exports and smoke-tests the beta bundle. GitHub Actions calls the same helper for release tags and attaches the bundle, SHA256 checksums, dependency provenance and verification output. `scripts/prepare-local-flatpak.py` prepares the offline manifest under `.cache/`. It includes wheel dependencies, source-built MIT Kerberos, source-patched Qt Multimedia, wl-clipboard 2.2.1 built with meson from a checksum-pinned release tarball (`packaging/wl-clipboard.json`) and the same minimal Qwen source patch used by the native installer. This recipe is for direct GitHub distribution, not the final Flathub source recipe
 
 ```bash
 # Clean release build (Flatpak, Builder and KDE SDK required)
@@ -45,13 +62,13 @@ flatpak run org.flatpak.Builder --user --force-clean \
 mkdir -p dist
 flatpak build-bundle --arch=x86_64 \
   --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.3-x86_64.flatpak \
+  .cache/flatpak-release-repo dist/PhimThaiMaiPen-2.0.0-beta.6-x86_64.flatpak \
   io.github.tatarus9450.PhimThaiMaiPen beta
 ```
 
-Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Permissions are Wayland, X11 (also under Wayland for the XCB popup), IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
+Models live in the app's XDG data directory, outside installation updates. Their catalog entries pin revisions and verify downloaded contents. Permissions are Wayland, X11 (kept under Wayland because the dictation popup is an XCB/XWayland window that can be positioned without taking focus; see Roadmap), IPC, PulseAudio, network for downloads and `dri` for graphics devices. No unrestricted home or D-Bus access is included. Per-run filesystem access used by test scripts is not part of the package
 
-The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. **Auto stays on CPU in beta 3.** GPU and NPU options show a red **Beta** warning; they remain under development and CPU is recommended for ordinary dictation. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
+The public beta uses CPU PyTorch and includes OpenVINO for compatible alternative models. **Auto stays on CPU.** GPU and NPU options show a red **Beta** warning; they remain under development and CPU is recommended for ordinary dictation. AMD NPU/FastFlowLM and Vulkan experiments are excluded by default. `--experimental-accelerators` opts into locally built artifacts for developers only; `--source-pyside` uses the local source-PySide proof. Neither switch is used by the public release workflow
 
 ## Historical integration evidence
 

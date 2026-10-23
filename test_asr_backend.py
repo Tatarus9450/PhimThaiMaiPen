@@ -1,4 +1,5 @@
 """Backend routing and profile regression checks; no model download required."""
+import importlib.util
 import unittest
 import tempfile
 import sys
@@ -42,6 +43,7 @@ class BackendTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             get_asr_backend({"TYPHOON_ASR_BACKEND": "typo"})
 
+    @unittest.skipUnless(importlib.util.find_spec("soundfile"), "soundfile is not installed")
     def test_qwen_language_detection_and_override(self):
         model = Mock()
         with tempfile.TemporaryDirectory() as directory, patch.object(service, "MODEL", model), patch.dict(service.CONFIG, {"TYPHOON_ASR_BACKEND": "qwen"}):

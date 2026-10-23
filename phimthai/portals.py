@@ -123,12 +123,12 @@ class Portals:
                 raise RuntimeError(" ".join(str(v) for v in reply.body))
             code, values = await asyncio.wait_for(future, timeout=120)
             if code:
-                raise RuntimeError("Desktop permission was cancelled or denied")
+                raise RuntimeError("ระบบไม่ได้อนุญาต (ถูกยกเลิกหรือปฏิเสธ) ลองกดอนุญาตอีกครั้ง")
             return {key: value.value for key, value in values.items()}
         except asyncio.TimeoutError as exc:
             await self.bus.call(Message(destination=DEST, path=path,
                 interface="org.freedesktop.portal.Request", member="Close"))
-            raise RuntimeError("Desktop permission request timed out. Try again when ready to respond.") from exc
+            raise RuntimeError("หน้าต่างขออนุญาตหมดเวลา ลองใหม่แล้วตอบภายใน 2 นาที") from exc
         finally:
             self.responses.pop(path, None)
 
@@ -147,12 +147,12 @@ class Portals:
             reply = await self.bus.call(Message(destination=DEST, path=PATH, interface="org.freedesktop.portal.GlobalShortcuts",
                 member="ConfigureShortcuts", signature="osa{sv}", body=[self.shortcuts, "", {}]))
             if reply.message_type == MessageType.ERROR:
-                raise RuntimeError("Shortcut configuration is unavailable on this desktop. Restart the app to bind again.")
+                raise RuntimeError("เดสก์ท็อปนี้เปิดหน้าตั้งค่าปุ่มลัดไม่ได้ ปิดแล้วเปิดแอปใหม่เพื่อผูกปุ่มลัดอีกครั้ง")
             if persist:
                 try:
                     remember(shortcut=trigger)
                 except OSError:
-                    emit(event="warning", error="Shortcut works for this session; desktop preference could not be saved")
+                    emit(event="warning", error="ปุ่มลัดใช้ได้เฉพาะรอบนี้ บันทึกค่าไว้ใช้ครั้งหน้าไม่สำเร็จ")
             return
         session = await self.session("GlobalShortcuts")
         try:
@@ -167,7 +167,7 @@ class Portals:
                 try:
                     remember(shortcut=trigger)
                 except OSError:
-                    emit(event="warning", error="Shortcut works for this session; desktop preference could not be saved")
+                    emit(event="warning", error="ปุ่มลัดใช้ได้เฉพาะรอบนี้ บันทึกค่าไว้ใช้ครั้งหน้าไม่สำเร็จ")
         except BaseException:
             await self.close_session(session)
             raise
@@ -202,14 +202,14 @@ class Portals:
                 [session, options])
             response = await self.request("RemoteDesktop", "Start", "osa{sv}", [session, "", {}])
             if not response.get("devices", 0) & 1:
-                raise RuntimeError("Keyboard permission was not granted")
+                raise RuntimeError("ไม่ได้รับสิทธิ์คีย์บอร์ด จึงวางอัตโนมัติไม่ได้ ลองอนุญาตใหม่หรือใช้ปุ่มคัดลอก")
             persisted = False
             if persist:
                 try:
                     remember(paste_token=response.get("restore_token", ""))
                     persisted = bool(response.get("restore_token"))
                 except OSError:
-                    emit(event="warning", error="Paste works for this session; desktop permission could not be saved")
+                    emit(event="warning", error="วางอัตโนมัติใช้ได้เฉพาะรอบนี้ บันทึกสิทธิ์ไว้ใช้ครั้งหน้าไม่สำเร็จ")
             self.remote = session
         except BaseException:
             await self.close_session(session)
@@ -218,7 +218,7 @@ class Portals:
             try:
                 await self.close_session(previous)
             except Exception:
-                emit(event="warning", error="Previous paste session could not be closed; it will end when the app exits")
+                emit(event="warning", error="ปิดสิทธิ์วางรอบก่อนไม่สำเร็จ จะปิดเองเมื่อออกจากแอป")
         emit(event="paste_enabled", persistent=persisted)
 
     async def restore(self, skip_shortcuts=False):
@@ -235,33 +235,33 @@ class Portals:
 
     async def paste(self, request_id=None):
         if not self.remote:
-            raise RuntimeError("Enable paste permission in Settings, or use Copy")
+            raise RuntimeError("ยังไม่ได้อนุญาตวางอัตโนมัติ เปิดในการตั้งค่า หรือกดคัดลอกแล้ววางเอง (Ctrl+V)")
         async def key(keycode, state):
             try:
                 return await asyncio.wait_for(self.bus.call(Message(destination=DEST, path=PATH,
                         interface="org.freedesktop.portal.RemoteDesktop", member="NotifyKeyboardKeycode",
                         signature="oa{sv}iu", body=[self.remote, {}, keycode, state])), timeout=5)
             except asyncio.TimeoutError as exc:
-                raise RuntimeError("Keyboard request timed out") from exc
+                raise RuntimeError("ส่งปุ่มวางไม่ทันเวลา ลองวางอีกครั้ง หรือกด Ctrl+V เอง") from exc
         # Linux evdev KEY_LEFTCTRL / KEY_V. A Latin 'v' keysym cannot be
         # resolved by KDE while the Thai keyboard layout is active.
         try:
             for keycode in (29, 47):
                 reply = await key(keycode, 1)
                 if reply.message_type == MessageType.ERROR:
-                    raise RuntimeError("Keyboard request failed")
+                    raise RuntimeError("ส่งปุ่มวางไม่สำเร็จ ลองวางอีกครั้ง หรือกด Ctrl+V เอง")
         finally:
             release_error = None
             for keycode in (47, 29):
                 try:
                     reply = await key(keycode, 0)
                     if reply.message_type == MessageType.ERROR:
-                        raise RuntimeError("Keyboard release failed")
+                        raise RuntimeError("ปล่อยปุ่ม Ctrl/V ไม่สำเร็จ ถ้าปุ่มค้างให้กด Ctrl หนึ่งครั้ง")
                 except Exception as exc:
                     # Still release Ctrl if releasing V failed.
                     release_error = release_error or exc
             if release_error:
-                raise RuntimeError("Keyboard release failed") from release_error
+                raise RuntimeError("ปล่อยปุ่ม Ctrl/V ไม่สำเร็จ ถ้าปุ่มค้างให้กด Ctrl หนึ่งครั้ง") from release_error
         emit(event="paste_sent", request_id=request_id)
 
 

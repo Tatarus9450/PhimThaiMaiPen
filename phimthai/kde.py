@@ -27,8 +27,12 @@ COMPONENT = APP_ID + ".desktop"
 ACTION = [COMPONENT, "Record", "PhimThaiMaiPen", "Start or stop recording"]
 MODE_ACTION = [COMPONENT, "CycleMode", "PhimThaiMaiPen", "Cycle typing mode"]
 LEGACY = ("linux-voice-typing-record.desktop", "linux-voice-typing-profile.desktop")
-OWNED_ACTIONS = {(COMPONENT, "Record"), (COMPONENT, "CycleMode"), (APP_ID, "record"),
+# The XDG GlobalShortcuts portal registers the running app (Flatpak) under APP_ID.
+PORTAL_ACTIONS = [[APP_ID, "record", "PhimThaiMaiPen", "Start / stop voice typing"],
+                  [APP_ID, "cycle-mode", "PhimThaiMaiPen", "Switch dictation mode"]]
+OWNED_ACTIONS = {(COMPONENT, "Record"), (COMPONENT, "CycleMode"), (APP_ID, "record"), (APP_ID, "cycle-mode"),
                  *((name, "_launch") for name in LEGACY)}
+SYSTEM_FLATPAK_EXPORTS = Path("/var/lib/flatpak/exports/share/applications")
 # KDE kglobalaccel/src/kglobalaccel_p.h: SetPresent=2, NoAutoloading=4.
 SET_ACTIVE = 6
 
@@ -39,6 +43,20 @@ def is_kde():
 
 def data_home():
     return Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
+
+
+def config_home():
+    return Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+
+
+def shortcuts_config():
+    return config_home() / "kglobalshortcutsrc"
+
+
+def flatpak_installed():
+    """The Flatpak build binds through the portal whenever it runs."""
+    return any((directory / COMPONENT).exists() for directory in
+               (data_home() / "flatpak/exports/share/applications", SYSTEM_FLATPAK_EXPORTS))
 
 
 def _key(trigger):
@@ -122,6 +140,17 @@ async def _install(bus, trigger, launcher):
     mode_key, mode_trigger = _key(_label(mode_keys) if mode_keys else "Meta+Shift+H")
     if key == mode_key:
         raise RuntimeError("Recording and cycling modes need different shortcuts")
+    for action in PORTAL_ACTIONS:
+        taken = [value for value in (await _call(bus, "shortcut", "as", [action]))[0] if value in (key, mode_key)]
+        if not taken:
+            continue
+        component_path = (await _call(bus, "getComponent", "s", [APP_ID]))[0]
+        live = bool((await _call(bus, "isActive", path=component_path,
+                                 interface="org.kde.kglobalaccel.Component"))[0])
+        if live or flatpak_installed():
+            # Two owners of one key would toggle recording twice per press.
+            raise RuntimeError(f"{_label(taken)} ถูกผูกกับปุ่มลัดของแอป (portal/Flatpak) อยู่แล้ว "
+                               "จึงไม่ติดตั้งปุ่มลัดแบบเนทีฟซ้ำ ใช้ปุ่มลัดจากแอป หรือถอนแอป Flatpak ก่อน")
     for candidate, label in ((key, trigger), (mode_key, mode_trigger)):
         owners = (await _call(bus, "getGlobalShortcutsByKey", "i", [candidate]))[0]
         for owner in owners:
@@ -129,27 +158,17 @@ async def _install(bus, trigger, launcher):
             if (owner[2], owner[0]) not in OWNED_ACTIONS:
                 raise RuntimeError(f"{label} belongs to {owner[3]} / {owner[1]}; choose another shortcut")
 
-    retired = [[APP_ID, "record", "PhimThaiMaiPen", "Start / stop voice typing"],
-               *[[name, "_launch", "PhimThaiMaiPen", "Launch"] for name in LEGACY]]
+    retired = [*PORTAL_ACTIONS, *[[name, "_launch", "PhimThaiMaiPen", "Launch"] for name in LEGACY]]
     existing = (await _call(bus, "allActionsForComponent", "as", [[COMPONENT, "", "", ""]]))[0]
     extra = [action for action in existing if action[:2] not in [ACTION[:2], MODE_ACTION[:2]]]
-    bindings = []
-    for action in [ACTION, MODE_ACTION, *extra, *retired]:
-        keys = (await _call(bus, "shortcut", "as", [action]))[0]
-        present = False
-        if keys:
-            component_path = (await _call(bus, "getComponent", "s", [action[0]]))[0]
-            present = bool((await _call(bus, "isActive", path=component_path,
-                interface="org.kde.kglobalaccel.Component"))[0])
-        bindings.append({"action": action, "keys": keys, "present": present})
+    bindings = await _snapshot(bus, [ACTION, MODE_ACTION, *extra, *retired])
     desktop = data_home() / "applications" / COMPONENT
     service = data_home() / "kglobalaccel" / COMPONENT
     # The separate legacy cleanup also owns applications/profile.desktop. Its
     # shortcut and kglobalaccel copy are retired here, without touching that file.
     legacy_files = [data_home() / "applications" / LEGACY[0],
                     *[data_home() / "kglobalaccel" / name for name in LEGACY]]
-    config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "kglobalshortcutsrc"
-    backup = _backup([desktop, service, config, *legacy_files], bindings)
+    backup = _backup([desktop, service, shortcuts_config(), *legacy_files], bindings)
     try:
         text = _desktop_text(launcher)
         if "[Desktop Action CycleMode]" not in text:
@@ -185,37 +204,178 @@ async def _install(bus, trigger, launcher):
         status.update(backup=str(backup), persistent=True)
         return status
     except Exception as exc:
-        # Restore only bindings touched in this transaction; never overwrite the
-        # full config while the daemon may be saving unrelated user changes.
-        failures = []
-        manifest = json.loads((backup / "manifest.json").read_text())
-        originals = {item["path"]: backup / item["backup"] for item in manifest["files"]}
-        for path in [desktop, service, *legacy_files]:
-            try:
-                if str(path) in originals:
-                    _write(path, originals[str(path)].read_text())
-                else:
-                    path.unlink(missing_ok=True)
-            except OSError as restore_error:
-                failures.append(str(restore_error))
+        await _rollback(bus, exc, backup, [desktop, service, *legacy_files], bindings)
+
+
+async def _snapshot(bus, actions):
+    bindings = []
+    for action in actions:
+        keys = (await _call(bus, "shortcut", "as", [action]))[0]
+        present = False
+        if keys:
+            component_path = (await _call(bus, "getComponent", "s", [action[0]]))[0]
+            present = bool((await _call(bus, "isActive", path=component_path,
+                interface="org.kde.kglobalaccel.Component"))[0])
+        bindings.append({"action": action, "keys": keys, "present": present})
+    return bindings
+
+
+async def _rollback(bus, exc, backup, paths, bindings):
+    # Restore only bindings touched in this transaction; never overwrite the
+    # full config while the daemon may be saving unrelated user changes.
+    failures = []
+    manifest = json.loads((backup / "manifest.json").read_text())
+    originals = {item["path"]: backup / item["backup"] for item in manifest["files"]}
+    for path in paths:
         try:
-            component_path = (await _call(bus, "getComponent", "s", [COMPONENT]))[0]
-            await _call(bus, "cleanUp", path=component_path, interface="org.kde.kglobalaccel.Component")
-            if shutil.which("kbuildsycoca6"):
-                subprocess.run(["kbuildsycoca6", "--noincremental"], check=True,
-                               capture_output=True, text=True, timeout=20)
+            if str(path) in originals:
+                _write(path, originals[str(path)].read_text())
+            else:
+                path.unlink(missing_ok=True)
+        except OSError as restore_error:
+            failures.append(str(restore_error))
+    try:
+        component_path = (await _call(bus, "getComponent", "s", [COMPONENT]))[0]
+        await _call(bus, "cleanUp", path=component_path, interface="org.kde.kglobalaccel.Component")
+        if shutil.which("kbuildsycoca6"):
+            subprocess.run(["kbuildsycoca6", "--noincremental"], check=True,
+                           capture_output=True, text=True, timeout=20)
+    except Exception as restore_error:
+        failures.append(str(restore_error))
+    for item in bindings:
+        try:
+            await _call(bus, "doRegister", "as", [item["action"]])
+            await _call(bus, "setShortcut", "asaiu", [item["action"], item["keys"], SET_ACTIVE if item["present"] else 4])
+            if not item["present"]:
+                await _call(bus, "setInactive", "as", [item["action"]])
         except Exception as restore_error:
             failures.append(str(restore_error))
-        for item in bindings:
-            try:
-                await _call(bus, "doRegister", "as", [item["action"]])
-                await _call(bus, "setShortcut", "asaiu", [item["action"], item["keys"], SET_ACTIVE if item["present"] else 4])
-                if not item["present"]:
-                    await _call(bus, "setInactive", "as", [item["action"]])
-            except Exception as restore_error:
-                failures.append(str(restore_error))
-        raise RuntimeError(f"{exc}. Shortcut backup: {backup}" +
-                           ("; restoration needs attention: " + "; ".join(failures) if failures else "")) from exc
+    raise RuntimeError(f"{exc}. Shortcut backup: {backup}" +
+                       ("; restoration needs attention: " + "; ".join(failures) if failures else "")) from exc
+
+
+def _service_actions(existing=()):
+    actions = [ACTION, MODE_ACTION, *[action for action in existing if action[:2] not in [ACTION[:2], MODE_ACTION[:2]]]]
+    return actions + [[name, "_launch", "PhimThaiMaiPen", "Launch"] for name in LEGACY]
+
+
+async def _remove_services(bus):
+    """Remove only this app's KDE service-action shortcuts; the portal binding stays."""
+    existing = (await _call(bus, "allActionsForComponent", "as", [[COMPONENT, "", "", ""]]))[0]
+    actions = _service_actions(existing)
+    bindings = await _snapshot(bus, actions)
+    service_files = [data_home() / "kglobalaccel" / name for name in (COMPONENT, *LEGACY)]
+    backup = _backup([*service_files, shortcuts_config()], bindings)
+    try:
+        for action in actions:
+            await _call(bus, "unregister", "ss", action[:2])
+        # Without the kglobalaccel desktop copy, KDE cannot re-create the entry.
+        for path in service_files:
+            path.unlink(missing_ok=True)
+        if shutil.which("kbuildsycoca6"):
+            subprocess.run(["kbuildsycoca6", "--noincremental"], check=True,
+                           capture_output=True, text=True, timeout=20)
+        left = [action[:2] for action in actions if (await _call(bus, "shortcut", "as", [action]))[0]]
+        if left:
+            raise RuntimeError("KDE kept service shortcuts: " + ", ".join("/".join(item) for item in left))
+        removed = [{"component": item["action"][0], "action": item["action"][1], "trigger": _label(item["keys"])}
+                   for item in bindings if item["keys"]]
+        return {"removed": removed, "backup": str(backup), "kept": "portal"}
+    except Exception as exc:
+        await _rollback(bus, exc, backup, service_files, bindings)
+
+
+def _source(group, component):
+    if group is None and component == APP_ID:
+        return "portal"
+    if component == COMPONENT:
+        return "service" if group == "services" else "native-component"
+    if component in LEGACY:
+        return "legacy"
+    return None
+
+
+def _labels(raw):
+    labels = []
+    for part in raw.split("\t"):
+        part = part.strip()
+        if not part or part.lower() == "none":
+            continue
+        sequence = QKeySequence.fromString(part, QKeySequence.SequenceFormat.PortableText)
+        labels.append(sequence.toString(QKeySequence.SequenceFormat.PortableText) or part)
+    return labels
+
+
+def config_bindings(path=None):
+    """This app's shortcut entries in kglobalshortcutsrc, read without changing it."""
+    try:
+        lines = Path(path or shortcuts_config()).read_text(errors="replace").splitlines()
+    except OSError:
+        return []
+    bindings, source, group, component = [], None, None, None
+    for line in lines:
+        line = line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            parts = line[1:-1].split("][")
+            group, component = (parts[0], "][".join(parts[1:])) if len(parts) > 1 else (None, parts[0])
+            source = _source(group, component)
+            continue
+        if not source or "=" not in line or line.startswith(("#", "_k_")):
+            continue
+        action, value = line.split("=", 1)
+        # Components store "active,default,description"; services store only keys.
+        keys = _labels(value if group == "services" else value.split(",", 1)[0])
+        if keys:
+            bindings.append({"source": source, "component": component, "action": action.strip(), "keys": keys})
+    return bindings
+
+
+def find_conflicts(bindings=None):
+    """Triggers bound more than once by this app (portal, service or legacy entries)."""
+    owners = {}
+    for item in config_bindings() if bindings is None else bindings:
+        for label in item["keys"]:
+            owners.setdefault(label, []).append({key: item[key] for key in ("source", "component", "action")})
+    return [{"trigger": label, "bindings": entries} for label, entries in owners.items() if len(entries) > 1]
+
+
+async def _live_bindings(bus):
+    bindings = []
+    for action in [*PORTAL_ACTIONS, *_service_actions()]:
+        keys = (await _call(bus, "shortcut", "as", [action]))[0]
+        if keys:
+            bindings.append({"source": _source("services" if action[0] != APP_ID else None, action[0]),
+                             "component": action[0], "action": action[1], "keys": [_label([value]) for value in keys]})
+    return bindings
+
+
+def doctor():
+    """JSON-ready report of duplicate registrations; changes nothing."""
+    bindings = config_bindings()
+    report = {"config": str(shortcuts_config()), "bindings": bindings, "conflicts": find_conflicts(bindings),
+              "flatpak_installed": flatpak_installed()}
+    try:
+        live = _sync(_live_bindings)
+        report.update(live_bindings=live, live_conflicts=find_conflicts(live))
+    except Exception as exc:
+        report["live_error"] = str(exc)
+    conflicts = report["conflicts"] + report.get("live_conflicts", [])
+    sources = {entry["source"] for conflict in conflicts for entry in conflict["bindings"]}
+    report["ok"] = not conflicts
+    if "portal" in sources and sources - {"portal"}:
+        report["advice"] = ("ปุ่มลัดเดียวกันถูกผูกสองที่ กดครั้งเดียวอาจเริ่มแล้วหยุดทันที "
+                            "แก้ด้วย: python -m phimthai.kde --remove-service-shortcuts")
+    elif conflicts:
+        report["advice"] = "มีปุ่มลัดซ้ำกัน เปลี่ยนปุ่มใดปุ่มหนึ่งใน System Settings > Shortcuts"
+    return report
+
+
+def remove_service_shortcuts():
+    """Remove this app's service-action shortcuts; return what was removed."""
+    try:
+        return _sync(_remove_services)
+    except Exception as exc:
+        return {"removed": [], "error": str(exc)}
 
 
 async def _connected(operation, *args):
@@ -288,10 +448,19 @@ def main():
     modes.add_argument("--install", nargs="?", const="", metavar="TRIGGER")
     modes.add_argument("--status", action="store_true")
     modes.add_argument("--ensure", action="store_true", help="Keep an existing active shortcut when updating")
+    modes.add_argument("--doctor", action="store_true", help="Report duplicate shortcut registrations (read-only)")
+    modes.add_argument("--remove-service-shortcuts", action="store_true",
+                       help="Remove only this app's KDE service-action shortcuts, keeping the portal binding")
     parser.add_argument("--trigger", default="Meta+H")
     parser.add_argument("--launcher", type=Path)
     args = parser.parse_args()
-    if args.ensure:
+    if args.doctor:
+        result = doctor()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["ok"] else 2
+    if args.remove_service_shortcuts:
+        result = remove_service_shortcuts()
+    elif args.ensure:
         result = ensure_shortcut(args.launcher)
     else:
         result = install_shortcut(args.install or args.trigger, args.launcher) if args.install is not None else shortcut_status()

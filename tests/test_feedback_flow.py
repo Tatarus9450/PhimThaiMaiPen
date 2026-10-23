@@ -9,6 +9,11 @@ from tests.test_app_review import IsolatedWindow
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 from PySide6.QtTest import QTest
 
+from phimthai import strings as S
+
+# The portal ACK means "text delivered": pasted() when available, else typing().
+DELIVERED = {"typing", "pasted"}
+
 
 class InertMediaDevices(QObject):
     audioInputsChanged = Signal()
@@ -142,7 +147,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         self.window.paste_timer.stop()
         self.window.send_paste()
         self.acknowledge_paste()
-        self.assertEqual(self.window.feedback._phase, "typing")
+        self.assertIn(self.window.feedback._phase, DELIVERED)
         self.assertEqual(self.window.clipboard.restore_requests, 1)
         self.window.clipboard.restore()
 
@@ -181,7 +186,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         self.assertTrue(window.clipboard.owns_clipboard(), "Cancel must not replace data while keys are in flight")
         self.acknowledge_paste(first_id)
         self.assertIsNone(window.paste_inflight)
-        self.assertNotEqual(window.feedback._phase, "typing")
+        self.assertNotIn(window.feedback._phase, DELIVERED)
         self.assertEqual(window.clipboard.restore_requests, 1)
         window.paste()
         self.assertEqual(window.clipboard.offers, ["First synthetic paste"],
@@ -213,7 +218,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         window.send_paste()
         self.assertEqual(self.commands[-1], {"action": "paste", "request_id": second_id})
         self.acknowledge_paste(second_id)
-        self.assertEqual(window.feedback._phase, "typing")
+        self.assertIn(window.feedback._phase, DELIVERED)
         self.assertEqual(window.clipboard.restore_requests, 2)
 
     def test_cancelled_paste_error_delays_restore_without_reviving_feedback(self):
@@ -309,7 +314,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         self.window.send_paste()
         self.assertEqual(self.commands, [])
         self.assertEqual(self.window.clipboard.contents, "A newer external copy")
-        self.assertIn("clipboard changed", self.window.status.text())
+        self.assertEqual(S.PASTE_ABORT_CLIPBOARD_CHANGED, self.window.status.text())
         self.assert_pending_paste_ended()
 
     def test_permission_lost_at_dispatch_ends_feedback_and_allows_recording(self):
@@ -318,7 +323,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         self.window.portal_command("paste")
         self.assertEqual(self.commands, [])
         self.assertEqual(self.window.clipboard.contents, "Original clipboard")
-        self.assertIn("permission ended", self.window.status.text())
+        self.assertEqual(S.PASTE_ABORT_PERMISSION_ENDED, self.window.status.text())
         self.assert_pending_paste_ended()
 
     def test_permission_pending_at_dispatch_ends_feedback_and_allows_recording(self):
@@ -326,7 +331,7 @@ class FeedbackFlowTests(IsolatedWindow, unittest.TestCase):
         self.window.portal_permission_pending = True
         self.window.send_paste()
         self.assertEqual(self.commands, [])
-        self.assertIn("permissions are being configured", self.window.status.text())
+        self.assertEqual(S.PASTE_ABORT_PERMISSION_PENDING, self.window.status.text())
         self.assert_pending_paste_ended()
 
     def test_starting_permission_request_cancels_countdown_feedback(self):

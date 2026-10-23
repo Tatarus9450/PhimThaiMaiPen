@@ -60,7 +60,7 @@ def rendered_text_contrast(empty, with_text):
 
 class AppearanceTests(unittest.TestCase):
     def setUp(self):
-        apply_style(APP)
+        apply_style(APP, reduced_transparency=False, theme="auto", reduced_motion=False)
         self.canvas = GlassCanvas()
         self.canvas.resize(820, 600)
         self.panel = GlassPanel(self.canvas)
